@@ -548,7 +548,7 @@ namespace MediaBrowser.Api.Playback
                 // currently assume Height < MaxHeight and ignores and MaxWidth
                 var heightParam = request.Height.Value.ToString(UsCulture);
 
-                filters.Add(string.Format("scale=trunc(oh*a*2)/2:{0}", heightParam));
+                filters.Add(string.Format("scale=trunc(oh*a/2)*2:{0}", heightParam));
             }
 
             // If a max width was requested
@@ -556,7 +556,7 @@ namespace MediaBrowser.Api.Playback
             {
                 var maxWidthParam = request.MaxWidth.Value.ToString(UsCulture);
 
-                filters.Add(string.Format("scale=min(max(iw\\,ih*dar)\\,{0}):trunc(ow/dar/2)*2", maxWidthParam));
+                filters.Add(string.Format("scale=trunc(min(max(iw\\,ih*dar)\\,{0})/2)*2:trunc(ow/dar/2)*2", maxWidthParam));
             }
 
             // If a max height was requested
@@ -1181,13 +1181,14 @@ namespace MediaBrowser.Api.Playback
 				if (videoStream.IsAnamorphic.HasValue && videoStream.IsAnamorphic.Value)
 					isUpscaling = true;
 
-                // Don't allow bitrate increases unless upscaling
+                // Don't allow bitrate increases unless upscaling, when upscaling we will limit only by the VideoBitRate specified in the request
                 if (!isUpscaling)
                 {
-                    if (bitrate.HasValue && videoStream.BitRate.HasValue)
-                    {
-                        bitrate = Math.Min(bitrate.Value, videoStream.BitRate.Value);
-                    }
+                    int maxRequestBitRate = bitrate.HasValue ? bitrate.Value : int.MaxValue;
+                    int doubleSourceBitRate = videoStream.BitRate.HasValue ? videoStream.BitRate.Value * 2 : int.MaxValue;
+                    bitrate = Math.Min(maxRequestBitRate, doubleSourceBitRate);
+                    if (bitrate.Value == int.MaxValue)
+                        bitrate = null;
                 }
             }
 
