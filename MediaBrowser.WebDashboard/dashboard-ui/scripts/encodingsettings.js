@@ -11,7 +11,7 @@
 
         }).checkboxradio('refresh');
 
-        $('#selectVideoDecoder', page).val(config.HardwareVideoDecoder);
+        $('#selectVideoDecoder', page).val(config.HardwareAccelerationType);
         $('#selectThreadCount', page).val(config.EncodingThreadCount);
         $('#txtDownMixAudioBoost', page).val(config.DownMixAudioBoost);
         $('#txtTranscodingTempPath', page).val(config.TranscodingTempPath || '');
@@ -24,7 +24,7 @@
 
         var form = this;
 
-        ApiClient.getNamedConfiguration("encoding").done(function (config) {
+        ApiClient.getNamedConfiguration("encoding").then(function (config) {
 
             config.EnableDebugLogging = $('#chkEnableDebugEncodingLogging', form).checked();
             config.EncodingQuality = $('.radioEncodingQuality:checked', form).val();
@@ -32,9 +32,9 @@
             config.TranscodingTempPath = $('#txtTranscodingTempPath', form).val();
             config.EnableThrottling = $('#chkEnableThrottle', form).checked();
             config.EncodingThreadCount = $('#selectThreadCount', form).val();
-            config.HardwareVideoDecoder = $('#selectVideoDecoder', form).val();
+            config.HardwareAccelerationType = $('#selectVideoDecoder', form).val();
 
-            ApiClient.updateNamedConfiguration("encoding", config).done(Dashboard.processServerConfigurationUpdateResult);
+            ApiClient.updateNamedConfiguration("encoding", config).then(Dashboard.processServerConfigurationUpdateResult);
         });
 
         // Disable default form submission
@@ -77,7 +77,7 @@
 
         var page = this;
 
-        ApiClient.getNamedConfiguration("encoding").done(function (config) {
+        ApiClient.getNamedConfiguration("encoding").then(function (config) {
 
             loadPage(page, config);
 

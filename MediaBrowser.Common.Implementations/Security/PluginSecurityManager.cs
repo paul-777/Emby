@@ -21,7 +21,7 @@ namespace MediaBrowser.Common.Implementations.Security
     public class PluginSecurityManager : ISecurityManager
     {
         private const string MBValidateUrl = MbAdmin.HttpsUrl + "service/registration/validate";
-        private const string AppstoreRegUrl = /*MbAdmin.HttpsUrl*/ "http://mb3admin.com/admin/" + "service/appstore/register";
+        private const string AppstoreRegUrl = /*MbAdmin.HttpsUrl*/ "http://mb3admin.com/admin/service/appstore/register";
 
         /// <summary>
         /// The _is MB supporter
@@ -178,10 +178,34 @@ namespace MediaBrowser.Common.Implementations.Security
                     Email = response.email,
                     PlanType = response.planType,
                     SupporterKey = response.supporterKey,
-                    ExpirationDate = string.IsNullOrWhiteSpace(response.expDate) ? (DateTime?)null : DateTime.Parse(response.expDate),
-                    RegistrationDate = DateTime.Parse(response.regDate),
                     IsActiveSupporter = IsMBSupporter
                 };
+
+                if (!string.IsNullOrWhiteSpace(response.expDate))
+                {
+                    DateTime parsedDate;
+                    if (DateTime.TryParse(response.expDate, out parsedDate))
+                    {
+                        info.ExpirationDate = parsedDate;
+                    }
+                    else
+                    {
+                        _logger.Error("Failed to parse expDate: {0}", response.expDate);
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(response.regDate))
+                {
+                    DateTime parsedDate;
+                    if (DateTime.TryParse(response.regDate, out parsedDate))
+                    {
+                        info.RegistrationDate = parsedDate;
+                    }
+                    else
+                    {
+                        _logger.Error("Failed to parse regDate: {0}", response.regDate);
+                    }
+                }
 
                 info.IsExpiredSupporter = info.ExpirationDate.HasValue && info.ExpirationDate < DateTime.UtcNow && !string.IsNullOrWhiteSpace(info.SupporterKey);
 

@@ -17,6 +17,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
+using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Model.MediaInfo;
 
 namespace MediaBrowser.Providers.Manager
@@ -129,7 +130,7 @@ namespace MediaBrowser.Providers.Manager
                 {
                     if (!IsEnabled(savedOptions, imageType, item)) continue;
 
-                    if (!item.HasImage(imageType) || (refreshOptions.IsReplacingImage(imageType) && !downloadedImages.Contains(imageType)))
+                    if (!HasImage(item, imageType) || (refreshOptions.IsReplacingImage(imageType) && !downloadedImages.Contains(imageType)))
                     {
                         _logger.Debug("Running {0} for {1}", provider.GetType().Name, item.Path ?? item.Name);
 
@@ -198,6 +199,14 @@ namespace MediaBrowser.Providers.Manager
             ImageType.Thumb
         };
 
+        private bool HasImage(IHasImages item, ImageType type)
+        {
+            var image = item.GetImageInfo(type, 0);
+
+            // if it's a placeholder image then pretend like it's not there so that we can replace it
+            return image != null && !image.IsPlaceholder;
+        }
+
         /// <summary>
         /// Determines if an item already contains the given images
         /// </summary>
@@ -209,7 +218,7 @@ namespace MediaBrowser.Providers.Manager
         /// <returns><c>true</c> if the specified item contains images; otherwise, <c>false</c>.</returns>
         private bool ContainsImages(IHasImages item, List<ImageType> images, MetadataOptions savedOptions, int backdropLimit, int screenshotLimit)
         {
-            if (_singularImages.Any(i => images.Contains(i) && !item.HasImage(i) && savedOptions.GetLimit(i) > 0))
+            if (_singularImages.Any(i => images.Contains(i) && !HasImage(item, i) && savedOptions.GetLimit(i) > 0))
             {
                 return false;
             }
@@ -281,7 +290,7 @@ namespace MediaBrowser.Providers.Manager
                 {
                     if (!IsEnabled(savedOptions, imageType, item)) continue;
 
-                    if (!item.HasImage(imageType) || (refreshOptions.IsReplacingImage(imageType) && !downloadedImages.Contains(imageType)))
+                    if (!HasImage(item, imageType) || (refreshOptions.IsReplacingImage(imageType) && !downloadedImages.Contains(imageType)))
                     {
                         minWidth = savedOptions.GetMinWidth(imageType);
                         var downloaded = await DownloadImage(item, provider, result, list, minWidth, imageType, cancellationToken).ConfigureAwait(false);
@@ -505,13 +514,46 @@ namespace MediaBrowser.Providers.Manager
                 return true;
             }
 
-            return false;
+            if (!item.IsSaveLocalMetadataEnabled())
+            {
+                return true;
+            }
+
+            if (item is IItemByName && !(item is MusicArtist))
+            {
+                var hasDualAccess = item as IHasDualAccess;
+                if (hasDualAccess == null || hasDualAccess.IsAccessedByName)
+                {
+                    return true;
+                }
+            }
+
+            switch (type)
+            {
+                case ImageType.Primary:
+                    return false;
+                case ImageType.Thumb:
+                    return false;
+                case ImageType.Logo:
+                    return false;
+                case ImageType.Backdrop:
+                    return false;
+                case ImageType.Screenshot:
+                    return false;
+                default:
+                    return true;
+            }
         }
 
         private void SaveImageStub(IHasImages item, ImageType imageType, string url)
         {
             var newIndex = item.AllowsMultipleImages(imageType) ? item.GetImages(imageType).Count() : 0;
 
+            SaveImageStub(item, imageType, url, newIndex);
+        }
+
+        private void SaveImageStub(IHasImages item, ImageType imageType, string url, int newIndex)
+        {
             item.SetImage(new ItemImageInfo
             {
                 Path = url,
@@ -540,7 +582,7 @@ namespace MediaBrowser.Providers.Manager
                 {
                     SaveImageStub(item, imageType, url);
                     result.UpdateType = result.UpdateType | ItemUpdateType.ImageUpdate;
-                    return;
+                    continue;
                 }
 
                 try

@@ -573,7 +573,7 @@ namespace MediaBrowser.Server.Startup.Common
             {
                 try
                 {
-                    return new ImageMagickEncoder(LogManager.GetLogger("ImageMagick"), ApplicationPaths, HttpClient, FileSystemManager);
+                    return new ImageMagickEncoder(LogManager.GetLogger("ImageMagick"), ApplicationPaths, HttpClient, FileSystemManager, ServerConfigurationManager);
                 }
                 catch (Exception ex)
                 {
@@ -680,7 +680,7 @@ namespace MediaBrowser.Server.Startup.Common
 
         private async Task<ISyncRepository> GetSyncRepository()
         {
-            var repo = new SyncRepository(LogManager.GetLogger("SyncRepository"), ServerConfigurationManager.ApplicationPaths, JsonSerializer);
+            var repo = new SyncRepository(LogManager, JsonSerializer, ServerConfigurationManager.ApplicationPaths);
 
             await repo.Initialize().ConfigureAwait(false);
 

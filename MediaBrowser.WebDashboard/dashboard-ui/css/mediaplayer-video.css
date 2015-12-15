@@ -1,5 +1,4 @@
-﻿.videoBackdrop {
-    /* Allows popups to be closed, because their z-index is 1099 */
+﻿#mediaPlayer {
     z-index: 1098;
     position: fixed;
     background-color: transparent;
@@ -347,4 +346,16 @@
         -webkit-transform: scale(1);
         opacity: 0;
     }
+}
+
+video::-webkit-media-text-track-container {
+}
+
+video::-webkit-media-text-track-background {
+    /*Style the text background*/
+}
+
+#videoPlayer:not(.idlePlayer) video:not([controls])::-webkit-media-text-track-display {
+    /*Style the text itself*/
+    margin-top: -2.5em;
 }
