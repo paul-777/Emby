@@ -63,7 +63,8 @@
                     centerText: true,
                     lazy: true,
                     overlayText: false,
-                    showDetailsMenu: true
+                    showDetailsMenu: true,
+                    overlayPlayButton: true
                 });
             }
 
@@ -195,7 +196,8 @@
                 shape: getPortraitShape(),
                 centerText: true,
                 lazy: true,
-                showDetailsMenu: true
+                showDetailsMenu: true,
+                overlayPlayButton: true
             });
         }
         html += '</div>';
@@ -370,13 +372,13 @@
             }
         }
 
-        $(MediaController).on('playbackstop', onPlaybackStop);
+        Events.on(MediaController, 'playbackstop', onPlaybackStop);
     });
 
     pageIdOn('pagebeforehide', "moviesPage", function () {
 
         var page = this;
-        $(MediaController).off('playbackstop', onPlaybackStop);
+        Events.off(MediaController, 'playbackstop', onPlaybackStop);
     });
 
     function onPlaybackStop(e, state) {

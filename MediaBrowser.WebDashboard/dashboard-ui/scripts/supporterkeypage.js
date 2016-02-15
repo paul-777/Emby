@@ -77,8 +77,8 @@
             oldkey: oldkey
         };
 
-        var url = "http://mb3admin.com/admin/service/supporter/linkKeys";
-        Logger.log(url);
+        var url = "https://mb3admin.com/admin/service/supporter/linkKeys";
+        console.log(url);
         $.post(url, info).then(function (res) {
             var result = JSON.parse(res);
             Dashboard.hideLoadingMsg();
@@ -87,7 +87,7 @@
             } else {
                 Dashboard.alert(result.ErrorMessage);
             }
-            Logger.log(result);
+            console.log(result);
 
         });
 
@@ -101,8 +101,8 @@
 
         var email = $('#txtEmail', form).val();
 
-        var url = "http://mb3admin.com/admin/service/supporter/retrievekey?email=" + email;
-        Logger.log(url);
+        var url = "https://mb3admin.com/admin/service/supporter/retrievekey?email=" + email;
+        console.log(url);
         $.post(url).then(function (res) {
             var result = JSON.parse(res);
             Dashboard.hideLoadingMsg();
@@ -111,7 +111,7 @@
             } else {
                 Dashboard.alert(result.ErrorMessage);
             }
-            Logger.log(result);
+            console.log(result);
 
         });
 
@@ -254,9 +254,9 @@ $(document).on('pageshow', "#supporterKeyPage", SupporterKeyPage.onPageShow);
 
     function loadUserInfo(page) {
 
-        ApiClient.getJSON(ApiClient.getUrl('System/SupporterInfo')).then(function (info) {
+        Dashboard.getPluginSecurityInfo().then(function (info) {
 
-            if (info.IsActiveSupporter) {
+            if (info.IsMBSupporter) {
                 $('.supporterContainer', page).addClass('hide');
             } else {
                 $('.supporterContainer', page).removeClass('hide');

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Web;
 using Funq;
 using MediaBrowser.Model.Logging;
 using ServiceStack;
@@ -135,9 +136,25 @@ namespace MediaBrowser.Server.Implementations.HttpServer.SocketSharp
             {
                 return remoteIp ??
                     (remoteIp = XForwardedFor ??
-                                (XRealIp ??
-                                ((request.RemoteEndPoint != null) ? request.RemoteEndPoint.Address.ToString() : null)));
+                                (NormalizeIp(XRealIp) ??
+                                ((request.RemoteEndPoint != null) ? NormalizeIp(request.RemoteEndPoint.Address.ToString()) : null)));
             }
+        }
+
+        private string NormalizeIp(string ip)
+        {
+            if (!string.IsNullOrWhiteSpace(ip))
+            {
+                // Handle ipv4 mapped to ipv6
+                const string srch = "::ffff:";
+                var index = ip.IndexOf(srch, StringComparison.OrdinalIgnoreCase);
+                if (index == 0)
+                {
+                    ip = ip.Substring(srch.Length);
+                }
+            }
+
+            return ip;
         }
 
         public bool IsSecureConnection
@@ -236,7 +253,7 @@ namespace MediaBrowser.Server.Implementations.HttpServer.SocketSharp
         private NameValueCollectionWrapper queryString;
         public INameValueCollection QueryString
         {
-            get { return queryString ?? (queryString = new NameValueCollectionWrapper(HttpUtility.ParseQueryString(request.Url.Query))); }
+            get { return queryString ?? (queryString = new NameValueCollectionWrapper(MyHttpUtility.ParseQueryString(request.Url.Query))); }
         }
 
         private NameValueCollectionWrapper formData;

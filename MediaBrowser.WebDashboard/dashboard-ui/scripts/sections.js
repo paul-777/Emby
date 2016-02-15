@@ -2,9 +2,7 @@
 
     function getUserViews(userId) {
 
-        var deferred = $.Deferred();
-
-        ApiClient.getUserViews({}, userId).then(function (result) {
+        return ApiClient.getUserViews({}, userId).then(function (result) {
 
             var items = result.Items;
 
@@ -44,10 +42,8 @@
                 }
             }
 
-            deferred.resolveWith(null, [list]);
+            return list;
         });
-
-        return deferred.promise();
     }
 
     function enableScrollX() {
@@ -145,7 +141,7 @@
             html += '<a' + onclick + ' data-itemid="' + item.Id + '" class="' + cssClass + '" href="' + href + '">';
             html += '<div class="cardBox" style="background-color:' + backgroundColor + ';margin:4px;border-radius:4px;">';
 
-            html += "<div class='cardText' style='padding:8px 10px;color:#fff;font-size:14px;'>";
+            html += "<div class='cardText' style='padding:8px 10px;color:#fff;'>";
             html += '<iron-icon icon="' + icon + '"></iron-icon>';
             html += '<span style="margin-left:.7em;">' + item.Name + '</span>';
             html += "</div>";
@@ -259,7 +255,8 @@
                     showChildCountIndicator: true,
                     lazy: true,
                     context: 'home',
-                    centerText: true
+                    centerText: true,
+                    overlayPlayButton: true
                 });
                 html += '</div>';
             }
@@ -303,7 +300,8 @@
                     showUnplayedIndicator: false,
                     showChildCountIndicator: true,
                     lazy: true,
-                    context: 'home'
+                    context: 'home',
+                    overlayPlayButton: true
                 });
                 html += '</div>';
             }
@@ -336,12 +334,12 @@
                 html += '<div class="itemsContainer">';
                 html += LibraryBrowser.getPosterViewHtml({
                     items: result.Items,
-                    preferThumb: true,
                     shape: 'auto',
                     showTitle: true,
                     centerText: true,
                     lazy: true,
-                    showDetailsMenu: true
+                    showDetailsMenu: true,
+                    overlayPlayButton: true
                 });
                 html += '</div>';
             }
@@ -622,7 +620,7 @@
 
                 html += '<div>';
                 html += '<h1 style="display:inline-block; vertical-align:middle;" class="' + cssClass + '">' + Globalize.translate('HeaderLatestTvRecordings') + '</h1>';
-                html += '<a href="livetv.html?tab=3" onclick="LibraryManager.showTab(\'livetv.html\',3);" class="clearLink" style="margin-left:2em;"><paper-button raised class="more mini"><span>' + Globalize.translate('ButtonMore') + '</span></paper-button></a>';
+                html += '<a href="livetv.html?tab=3" onclick="LibraryBrowser.showTab(\'livetv.html\',3);" class="clearLink" style="margin-left:2em;"><paper-button raised class="more mini"><span>' + Globalize.translate('ButtonMore') + '</span></paper-button></a>';
                 html += '</div>';
             }
 
@@ -639,7 +637,8 @@
                 coverImage: true,
                 lazy: true,
                 showDetailsMenu: true,
-                centerText: true
+                centerText: true,
+                overlayPlayButton: true
             });
             html += '</div>';
 

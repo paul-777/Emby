@@ -3,30 +3,15 @@
     var supportsTextTracks;
     var hlsPlayer;
     var requiresSettingStartTimeOnStart;
+    var subtitleTrackIndexToSetOnPlaying;
 
     function htmlMediaRenderer(options) {
 
         var mediaElement;
         var self = this;
 
-        function hideStatusBar() {
-            if (options.type == 'video' && window.StatusBar) {
-                //StatusBar.backgroundColorByName("black");
-                //StatusBar.overlaysWebView(true);
-                StatusBar.hide();
-            }
-        }
-
-        function showStatusBar() {
-            if (options.type == 'video' && window.StatusBar) {
-                StatusBar.show();
-                //StatusBar.overlaysWebView(false);
-            }
-        }
-
         function onEnded() {
-            showStatusBar();
-            $(self).trigger('ended');
+            Events.trigger(self, 'ended');
         }
 
         function onTimeUpdate() {
@@ -46,55 +31,62 @@
             //    }
             //}
 
-            $(self).trigger('timeupdate');
+            Events.trigger(self, 'timeupdate');
         }
 
         function onVolumeChange() {
-            $(self).trigger('volumechange');
+            Events.trigger(self, 'volumechange');
         }
 
-        function onOneAudioPlaying() {
+        function onOneAudioPlaying(e) {
+
+            var elem = e.target;
+            elem.removeEventListener('playing', onOneAudioPlaying);
             $('.mediaPlayerAudioContainer').hide();
         }
 
         function onPlaying() {
-            $(self).trigger('playing');
+            Events.trigger(self, 'playing');
         }
 
         function onPlay() {
-            $(self).trigger('play');
+            Events.trigger(self, 'play');
         }
 
         function onPause() {
-            $(self).trigger('pause');
+            Events.trigger(self, 'pause');
         }
 
         function onClick() {
-            $(self).trigger('click');
+            Events.trigger(self, 'click');
         }
 
         function onDblClick() {
-            $(self).trigger('dblclick');
+            Events.trigger(self, 'dblclick');
         }
 
-        function onError() {
+        function onError(e) {
 
-            var errorCode = this.error ? this.error.code : '';
-            Logger.log('Media element error code: ' + errorCode);
+            var elem = e.target;
+            var errorCode = elem.error ? elem.error.code : '';
+            console.log('Media element error code: ' + errorCode);
 
-            showStatusBar();
-            $(self).trigger('error');
+            Events.trigger(self, 'error');
         }
 
-        function onLoadedMetadata() {
+        function onLoadedMetadata(e) {
+
+            var elem = e.target;
+
+            elem.removeEventListener('loadedmetadata', onLoadedMetadata);
 
             if (!hlsPlayer) {
-                this.play();
+                elem.play();
             }
         }
 
         function requireHlsPlayer(callback) {
-            require(['thirdparty/hls.min.js'], function (hls) {
+            require(['hlsjs'], function (hls) {
                 window.Hls = hls;
                 callback();
             });
@@ -119,14 +111,17 @@
             return 0;
         }
 
-        function onOneVideoPlaying() {
+        function onOneVideoPlaying(e) {
 
-            hideStatusBar();
+            var element = e.target;
+            element.removeEventListener('playing', onOneVideoPlaying);
+
+            self.setCurrentTrackElement(subtitleTrackIndexToSetOnPlaying);
 
             var requiresNativeControls = !self.enableCustomVideoControls();
 
             if (requiresNativeControls) {
-                $(this).attr('controls', 'controls');
+                $(element).attr('controls', 'controls');
             }
 
             if (requiresSettingStartTimeOnStart) {
@@ -138,7 +133,6 @@
                 if (startPositionInSeekParam && src.indexOf('.m3u8') != -1) {
 
                     var delay = browserInfo.safari ? 2500 : 0;
-                    var element = this;
                     if (delay) {
                         setTimeout(function () {
                             element.currentTime = startPositionInSeekParam;
@@ -160,12 +154,12 @@
                 var requiresControls = !MediaPlayer.canAutoPlayAudio();
 
                 if (requiresControls) {
-                    html += '<div class="mediaPlayerAudioContainer" style="position: fixed;top: 40%;text-align: center;left: 0;right: 0;"><div class="mediaPlayerAudioContainerInner">';;
+                    html += '<div class="mediaPlayerAudioContainer" style="position: fixed;top: 40%;text-align: center;left: 0;right: 0;z-index:999999;"><div class="mediaPlayerAudioContainerInner">';;
                 } else {
                     html += '<div class="mediaPlayerAudioContainer" style="display:none;padding: 1em;background: #222;"><div class="mediaPlayerAudioContainerInner">';;
                 }
 
-                html += '<audio class="mediaPlayerAudio" crossorigin="anonymous" controls>';
+                html += '<audio class="mediaPlayerAudio" controls>';
                 html += '</audio></div></div>';
 
                 $(document.body).append(html);
@@ -173,15 +167,18 @@
                 elem = $('.mediaPlayerAudio');
             }
 
-            return $(elem)
-	            .on('timeupdate', onTimeUpdate)
-	            .on('ended', onEnded)
-	            .on('volumechange', onVolumeChange)
-	            .one('playing', onOneAudioPlaying)
-	            .on('play', onPlay)
-	            .on('pause', onPause)
-	            .on('playing', onPlaying)
-	            .on('error', onError)[0];
+            elem = elem[0];
+
+            elem.addEventListener('playing', onOneAudioPlaying);
+            elem.addEventListener('timeupdate', onTimeUpdate);
+            elem.addEventListener('ended', onEnded);
+            elem.addEventListener('volumechange', onVolumeChange);
+            elem.addEventListener('error', onError);
+            elem.addEventListener('pause', onPause);
+            elem.addEventListener('play', onPlay);
+            elem.addEventListener('playing', onPlaying);
+
+            return elem;
         }
 
         function enableHlsPlayer(src) {
@@ -195,6 +192,11 @@
             return MediaPlayer.canPlayHls() && !MediaPlayer.canPlayNativeHls();
         }
 
+        function getCrossOriginValue(mediaSource) {
+
+            return 'anonymous';
+        }
+
         function createVideoElement() {
 
             var html = '';
@@ -206,33 +208,38 @@
 
             // Can't autoplay in these browsers so we need to use the full controls
             if (requiresNativeControls && AppInfo.isNativeApp && browserInfo.android) {
-                html += '<video class="itemVideo" id="itemVideo" preload="metadata" autoplay="autoplay" crossorigin="anonymous"' + poster + ' webkit-playsinline>';
+                html += '<video class="itemVideo" id="itemVideo" preload="metadata" autoplay="autoplay"' + poster + ' webkit-playsinline>';
             }
             else if (requiresNativeControls) {
-                html += '<video class="itemVideo" id="itemVideo" preload="metadata" autoplay="autoplay" crossorigin="anonymous"' + poster + ' controls="controls" webkit-playsinline>';
+                html += '<video class="itemVideo" id="itemVideo" preload="metadata" autoplay="autoplay"' + poster + ' controls="controls" webkit-playsinline>';
             }
             else {
 
                 // Chrome 35 won't play with preload none
-                html += '<video class="itemVideo" id="itemVideo" preload="metadata" autoplay="autoplay" crossorigin="anonymous"' + poster + ' webkit-playsinline>';
+                html += '<video class="itemVideo" id="itemVideo" preload="metadata" autoplay="autoplay"' + poster + ' webkit-playsinline>';
             }
 
             html += '</video>';
 
             var elem = $('#videoElement', '#videoPlayer').prepend(html);
 
-            return $('.itemVideo', elem)
-            	.one('.loadedmetadata', onLoadedMetadata)
-            	.one('playing', onOneVideoPlaying)
-	            .on('timeupdate', onTimeUpdate)
-	            .on('ended', onEnded)
-	            .on('volumechange', onVolumeChange)
-	            .on('play', onPlay)
-	            .on('pause', onPause)
-	            .on('playing', onPlaying)
-	            .on('click', onClick)
-	            .on('dblclick', onDblClick)
-	            .on('error', onError)[0];
+            var itemVideo = $('.itemVideo', elem)[0];
+
+            itemVideo.addEventListener('loadedmetadata', onLoadedMetadata);
+
+            itemVideo.addEventListener('timeupdate', onTimeUpdate);
+            itemVideo.addEventListener('ended', onEnded);
+            itemVideo.addEventListener('volumechange', onVolumeChange);
+
+            itemVideo.addEventListener('play', onPlay);
+            itemVideo.addEventListener('pause', onPause);
+            itemVideo.addEventListener('playing', onPlaying);
+
+            itemVideo.addEventListener('click', onClick);
+            itemVideo.addEventListener('dblclick', onDblClick);
+            itemVideo.addEventListener('error', onError);
+
+            return itemVideo;
         }
 
         // Save this for when playback stops, because querying the time at that point might return 0
@@ -274,7 +281,7 @@
                         hlsPlayer.destroy();
                     }
                     catch (err) {
-                        Logger.log(err);
+                        console.log(err);
                     }
 
                     hlsPlayer = null;
@@ -329,6 +336,7 @@
                 return;
             }
 
+            elem.crossOrigin = getCrossOriginValue(mediaSource);
             var val = streamInfo.url;
 
             if (AppInfo.isNativeApp && browserInfo.safari) {
@@ -347,6 +355,9 @@
             }
             else {
 
+                elem.removeEventListener('playing', onOneVideoPlaying);
+                elem.addEventListener('playing', onOneVideoPlaying);
+
                 if (hlsPlayer) {
                     hlsPlayer.destroy();
                     hlsPlayer = null;
@@ -364,6 +375,15 @@
                 }
 
                 tracks = tracks || [];
+
+                var currentTrackIndex = -1;
+                for (var i = 0, length = tracks.length; i < length; i++) {
+                    if (tracks[i].isDefault) {
+                        currentTrackIndex = i;
+                        break;
+                    }
+                }
+                subtitleTrackIndexToSetOnPlaying = currentTrackIndex;
 
                 if (enableHlsPlayer(val)) {
 
@@ -384,16 +404,8 @@
 
                     setTracks(elem, tracks);
 
-                    $(elem).one("loadedmetadata", onLoadedMetadata);
+                    elem.addEventListener("loadedmetadata", onLoadedMetadata);
                     playNow = true;
-                }
-
-                var currentTrackIndex = -1;
-                for (var i = 0, length = tracks.length; i < length; i++) {
-                    if (tracks[i].isDefault) {
-                        currentTrackIndex = i;
-                        break;
-                    }
                 }
 
                 self.setCurrentTrackElement(currentTrackIndex);
@@ -448,36 +460,34 @@
 
                 if (elem.tagName == 'AUDIO') {
 
-                    Events.off(elem, 'timeupdate', onTimeUpdate);
-                    Events.off(elem, 'ended', onEnded);
-                    Events.off(elem, 'volumechange', onVolumeChange);
-                    Events.off(elem, 'playing', onOneAudioPlaying);
-                    Events.off(elem, 'play', onPlay);
-                    Events.off(elem, 'pause', onPause);
-                    Events.off(elem, 'playing', onPlaying);
-                    Events.off(elem, 'error', onError);
+                    elem.removeEventListener('timeupdate', onTimeUpdate);
+                    elem.removeEventListener('ended', onEnded);
+                    elem.removeEventListener('volumechange', onVolumeChange);
+                    elem.removeEventListener('playing', onOneAudioPlaying);
+                    elem.removeEventListener('play', onPlay);
+                    elem.removeEventListener('pause', onPause);
+                    elem.removeEventListener('playing', onPlaying);
+                    elem.removeEventListener('error', onError);
 
                 } else {
 
-                    Events.off(elem, 'loadedmetadata', onLoadedMetadata);
-                    Events.off(elem, 'playing', onOneVideoPlaying);
-                    Events.off(elem, 'timeupdate', onTimeUpdate);
-                    Events.off(elem, 'ended', onEnded);
-                    Events.off(elem, 'volumechange', onVolumeChange);
-                    Events.off(elem, 'play', onPlay);
-                    Events.off(elem, 'pause', onPause);
-                    Events.off(elem, 'playing', onPlaying);
-                    Events.off(elem, 'click', onClick);
-                    Events.off(elem, 'dblclick', onDblClick);
-                    Events.off(elem, 'error', onError);
+                    elem.removeEventListener('loadedmetadata', onLoadedMetadata);
+                    elem.removeEventListener('playing', onOneVideoPlaying);
+                    elem.removeEventListener('timeupdate', onTimeUpdate);
+                    elem.removeEventListener('ended', onEnded);
+                    elem.removeEventListener('volumechange', onVolumeChange);
+                    elem.removeEventListener('play', onPlay);
+                    elem.removeEventListener('pause', onPause);
+                    elem.removeEventListener('playing', onPlaying);
+                    elem.removeEventListener('click', onClick);
+                    elem.removeEventListener('dblclick', onDblClick);
+                    elem.removeEventListener('error', onError);
                 }
 
                 if (elem.tagName.toLowerCase() != 'audio') {
                     $(elem).remove();
                 }
             }
-
-            showStatusBar();
         };
 
         self.supportsTextTracks = function () {
@@ -492,7 +502,7 @@
 
         self.setCurrentTrackElement = function (trackIndex) {
 
-            Logger.log('Setting new text track index to: ' + trackIndex);
+            console.log('Setting new text track index to: ' + trackIndex);
 
             var allTracks = mediaElement.textTracks; // get list of tracks
 
@@ -508,7 +518,7 @@
                     mode = 0; // hide all other tracks
                 }
 
-                Logger.log('Setting track ' + i + ' mode to: ' + mode);
+                console.log('Setting track ' + i + ' mode to: ' + mode);
 
                 // Safari uses integers for the mode property
                 // http://www.jwplayer.com/html5/scripting/
@@ -545,7 +555,7 @@
                         track.removeCue(track.cues[0]);
                     }
                 } catch (e) {
-                    Logger.log('Error removing cue from textTrack');
+                    console.log('Error removing cue from textTrack');
                 }
             }
 
@@ -568,7 +578,7 @@
                 return false;
             }
 
-            return self.canAutoPlayVideo() && !browserInfo.mobile;
+            return self.canAutoPlayVideo();
         };
 
         self.canAutoPlayVideo = function () {

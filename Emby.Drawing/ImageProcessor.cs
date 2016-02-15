@@ -257,7 +257,7 @@ namespace Emby.Drawing
 
                     imageProcessingLockTaken = true;
 
-                    _imageEncoder.EncodeImage(originalImagePath, cacheFilePath, newWidth, newHeight, quality, options, outputFormat);
+                    _imageEncoder.EncodeImage(originalImagePath, cacheFilePath, AutoOrient(options.Item), newWidth, newHeight, quality, options, outputFormat);
                 }
 
                 return new Tuple<string, string>(cacheFilePath, GetMimeType(outputFormat, cacheFilePath));
@@ -280,6 +280,32 @@ namespace Emby.Drawing
                 semaphore.Release();
             }
         }
+
+        private bool AutoOrient(IHasImages item)
+        {
+            var photo = item as Photo;
+            if (photo != null && photo.Orientation.HasValue)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        //private static  int[][] OPERATIONS = new int[][] {
+        // TopLeft
+        //new int[] {  0, NONE},
+        // TopRight
+        //new int[] {  0, HORIZONTAL},
+        //new int[] {180, NONE},
+        // LeftTop
+        //new int[] {  0, VERTICAL},
+        //new int[] { 90, HORIZONTAL},
+        // RightTop
+        //new int[] { 90, NONE},
+        //new int[] {-90, HORIZONTAL},
+        //new int[] {-90, NONE},
+        //};
 
         private string GetMimeType(ImageFormat format, string path)
         {

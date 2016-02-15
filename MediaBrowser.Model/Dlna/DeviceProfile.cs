@@ -36,7 +36,8 @@ namespace MediaBrowser.Model.Dlna
         public string SerialNumber { get; set; }
 
         public bool EnableAlbumArtInDidl { get; set; }
-        public bool EnableSingleAlbumArtLimit { get; set; }
+		public bool EnableSingleAlbumArtLimit { get; set; }
+		public bool EnableSingleSubtitleLimit { get; set; }
 
         public string SupportedMediaTypes { get; set; }
 
@@ -77,7 +78,6 @@ namespace MediaBrowser.Model.Dlna
 
         public bool EnableMSMediaReceiverRegistrar { get; set; }
         public bool IgnoreTranscodeByteRangeRequests { get; set; }
-        public bool EnableDlnaProtocol { get; set; }
 
         public XmlAttribute[] XmlRootAttributes { get; set; }
 

@@ -6,8 +6,8 @@
 
             require(['paper-fab', 'paper-item-body', 'paper-icon-item'], function () {
                 var html = '';
-
                 var index = '';
+                var imgUrl;
 
                 for (var i = 0, length = timers.length; i < length; i++) {
 
@@ -31,8 +31,8 @@
                     html += '<paper-icon-item>';
 
                     var program = timer.ProgramInfo || {};
-                    var imgUrl;
 
+                    imgUrl = null;
                     if (program.ImageTags && program.ImageTags.Primary) {
 
                         imgUrl = ApiClient.getScaledImageUrl(program.Id, {
@@ -133,7 +133,7 @@
                     airDate = parseISO8601Date(airDate, { toLocal: true }).toLocaleDateString();
                 }
                 catch (e) {
-                    Logger.log("Error parsing date: " + airDate);
+                    console.log("Error parsing date: " + airDate);
                 }
 
 
@@ -245,12 +245,15 @@
     function onRecordClick() {
         hideOverlay();
 
-        Dashboard.navigate('livetvnewrecording.html?programid=' + this.getAttribute('data-id'));
+        var programId = this.getAttribute('data-id');
+        require(['components/recordingcreator/recordingcreator'], function (recordingcreator) {
+            recordingcreator.show(programId);
+        });
     }
 
     function showOverlay(elem, item) {
 
-        require(['components/paperdialoghelper', 'scale-up-animation', 'fade-out-animation'], function () {
+        require(['paperdialoghelper', 'scale-up-animation', 'fade-out-animation'], function (paperdialoghelper) {
 
             var dlg = document.createElement('paper-dialog');
 
@@ -297,7 +300,7 @@
             LibraryBrowser.renderGenres($('.itemGenres', dlg), item, 3);
             $('.miscTvProgramInfo', dlg).html(LibraryBrowser.getMiscInfoHtml(item));
 
-            PaperDialogHelper.positionTo(dlg, elem);
+            paperdialoghelper.positionTo(dlg, elem);
 
             dlg.open();
 

@@ -1,4 +1,4 @@
-﻿(function (window, document, $, setTimeout, clearTimeout) {
+﻿define([], function () {
 
     var currentPlayer;
 
@@ -60,7 +60,7 @@
 
         html += '<paper-icon-button icon="play-arrow" class="mediaButton unpauseButton"></paper-icon-button>';
         html += '<paper-icon-button icon="pause" class="mediaButton pauseButton"></paper-icon-button>';
-        html += '<paper-icon-button icon="tablet-android" onclick="Dashboard.navigate(\'nowplaying.html\', false);" class="mediaButton remoteControlButton"></paper-icon-button>';
+        html += '<paper-icon-button icon="tablet-android" class="mediaButton remoteControlButton"></paper-icon-button>';
         html += '<paper-icon-button icon="queue-music" class="mediaButton playlistButton"></paper-icon-button>';
 
         html += '</div>';
@@ -79,7 +79,6 @@
         }
 
         return height + 'px';
-        return '80px';
     }
 
     function slideDown(elem) {
@@ -97,8 +96,6 @@
             return;
         }
 
-        onfinish();
-        return;
         requestAnimationFrame(function () {
             var keyframes = [
               { height: getHeight(elem), offset: 0 },
@@ -119,7 +116,6 @@
         if (!browserInfo.animate || browserInfo.mobile) {
             return;
         }
-        return;
 
         requestAnimationFrame(function () {
 
@@ -133,10 +129,10 @@
 
     function bindEvents(elem) {
 
-        currentTimeElement = $('.nowPlayingBarCurrentTime', elem);
-        nowPlayingImageElement = $('.nowPlayingImage', elem);
-        nowPlayingTextElement = $('.nowPlayingBarText', elem);
-        nowPlayingUserData = $('.nowPlayingBarUserDataButtons', elem);
+        currentTimeElement = elem.querySelector('.nowPlayingBarCurrentTime');
+        nowPlayingImageElement = elem.querySelector('.nowPlayingImage');
+        nowPlayingTextElement = elem.querySelector('.nowPlayingBarText');
+        nowPlayingUserData = elem.querySelector('.nowPlayingBarUserDataButtons');
 
         unmuteButton = $('.unmuteButton', elem).on('click', function () {
 
@@ -187,11 +183,14 @@
             }
         });
 
-        $('.playlistButton', elem).on('click', function () {
+        elem.querySelector('.remoteControlButton').addEventListener('click', function () {
 
-            $.mobile.changePage('nowplaying.html', {
-                dataUrl: 'nowplaying.html#playlist'
-            });
+            showRemoteControl();
+        });
+
+        elem.querySelector('.playlistButton').addEventListener('click', function () {
+
+            showRemoteControl('playlist');
         });
 
         toggleRepeatButton = $('.toggleRepeatButton', elem).on('click', function () {
@@ -251,6 +250,17 @@
                 this.pinValue = Dashboard.getDisplayTime(ticks);
             };
         }, 300);
+    }
+
+    function showRemoteControl(tab) {
+
+        if (tab) {
+            $.mobile.changePage('nowplaying.html', {
+                dataUrl: 'nowplaying.html#' + tab
+            });
+        } else {
+            Dashboard.navigate('nowplaying.html');
+        }
     }
 
     var nowPlayingBarElement;
@@ -375,7 +385,7 @@
 
         }
 
-        currentTimeElement.html(timeText);
+        currentTimeElement.innerHTML = timeText;
 
         updateNowPlayingInfo(state);
     }
@@ -468,16 +478,16 @@
         var nameHtml = MediaController.getNowPlayingNameHtml(state.NowPlayingItem) || '';
 
         if (nameHtml.indexOf('<br/>') != -1) {
-            nowPlayingTextElement.addClass('nowPlayingDoubleText');
+            nowPlayingTextElement.classList.add('nowPlayingDoubleText');
         } else {
-            nowPlayingTextElement.removeClass('nowPlayingDoubleText');
+            nowPlayingTextElement.classList.remove('nowPlayingDoubleText');
         }
 
         if (state.NowPlayingItem.Id) {
             nameHtml = '<a style="color:inherit;text-decoration:none;" href="' + LibraryBrowser.getHref(state.NowPlayingItem) + '">' + nameHtml + '</a>';
         }
 
-        nowPlayingTextElement.html(nameHtml);
+        nowPlayingTextElement.innerHTML = nameHtml;
 
         var url;
         var imgHeight = 80;
@@ -526,22 +536,20 @@
 
         currentImgUrl = url;
 
-        var imgHtml = '<img src="' + url + '" />';
-
-        nowPlayingImageElement.html(imgHtml);
+        ImageLoader.lazyImage(nowPlayingImageElement, url);
 
         if (nowPlayingItem.Id) {
             ApiClient.getItem(Dashboard.getCurrentUserId(), nowPlayingItem.Id).then(function (item) {
-                nowPlayingUserData.html(LibraryBrowser.getUserDataIconsHtml(item, false));
+                nowPlayingUserData.innerHTML = LibraryBrowser.getUserDataIconsHtml(item, false);
             });
         } else {
-            nowPlayingUserData.html('');
+            nowPlayingUserData.innerHTML = '';
         }
     }
 
     function onPlaybackStart(e, state) {
 
-        Logger.log('nowplaying event: ' + e.type);
+        console.log('nowplaying event: ' + e.type);
 
         var player = this;
 
@@ -569,7 +577,7 @@
 
     function onPlaybackStopped(e, state) {
 
-        Logger.log('nowplaying event: ' + e.type);
+        console.log('nowplaying event: ' + e.type);
         var player = this;
 
         player.endPlayerUpdates();
@@ -579,7 +587,7 @@
 
     function onStateChanged(e, state) {
 
-        //Logger.log('nowplaying event: ' + e.type);
+        //console.log('nowplaying event: ' + e.type);
         var player = this;
 
         if (player.isDefaultPlayer && state.NowPlayingItem && state.NowPlayingItem.MediaType == 'Video') {
@@ -593,11 +601,11 @@
 
         if (currentPlayer) {
 
-            $(currentPlayer).off('playbackstart', onPlaybackStart)
-                .off('playbackstop', onPlaybackStopped)
-                .off('volumechange', onVolumeChanged)
-                .off('playstatechange', onStateChanged)
-                .off('positionchange', onStateChanged);
+            Events.off(currentPlayer, 'playbackstart', onPlaybackStart);
+            Events.off(currentPlayer, 'playbackstop', onPlaybackStopped);
+            Events.off(currentPlayer, 'volumechange', onVolumeChanged);
+            Events.off(currentPlayer, 'playstatechange', onStateChanged);
+            Events.off(currentPlayer, 'positionchange', onStateChanged);
 
             currentPlayer.endPlayerUpdates();
             currentPlayer = null;
@@ -637,11 +645,11 @@
             onStateChanged.call(player, { type: 'init' }, state);
         });
 
-        $(player).on('playbackstart', onPlaybackStart)
-            .on('playbackstop', onPlaybackStopped)
-            .on('volumechange', onVolumeChanged)
-            .on('playstatechange', onStateChanged)
-            .on('positionchange', onStateChanged);
+        Events.on(player, 'playbackstart', onPlaybackStart);
+        Events.on(player, 'playbackstop', onPlaybackStopped);
+        Events.on(player, 'volumechange', onVolumeChanged);
+        Events.on(player, 'playstatechange', onStateChanged);
+        Events.on(player, 'positionchange', onStateChanged);
     }
 
     Events.on(MediaController, 'playerchange', function () {
@@ -651,4 +659,4 @@
 
     bindToPlayer(MediaController.getCurrentPlayer());
 
-})(window, document, jQuery, setTimeout, clearTimeout);
+});

@@ -11,7 +11,7 @@
         ApiClient.getUser(userId).then(function (user) {
 
             $('.username', page).html(user.Name);
-            Events.trigger($('#uploadUserImage', page).val('')[0], 'change');
+            $('#uploadUserImage', page).val('').trigger('change');
 
             Dashboard.setPageTitle(user.Name);
 
@@ -320,6 +320,15 @@
 
             Dashboard.alert(Globalize.translate('PasswordSaved'));
             loadUser(page);
+
+        }, function() {
+            
+            Dashboard.hideLoadingMsg();
+
+            Dashboard.alert({
+                title: Globalize.translate('HeaderLoginFailure'),
+                message: Globalize.translate('MessageInvalidUser')
+            });
 
         });
 

@@ -1,4 +1,4 @@
-﻿(function ($, document, Dashboard, LibraryBrowser) {
+﻿(function ($, document, Dashboard) {
 
     function notifications() {
 
@@ -177,14 +177,15 @@
     }
 
     function initializeApiClient(apiClient) {
-        $(apiClient).off("websocketmessage", onWebSocketMessage).on("websocketmessage", onWebSocketMessage);
+        Events.off(apiClient, "websocketmessage", onWebSocketMessage);
+        Events.on(apiClient, "websocketmessage", onWebSocketMessage);
     }
 
     if (window.ApiClient) {
         initializeApiClient(window.ApiClient);
     }
 
-    $(ConnectionManager).on('apiclientcreated', function (e, apiClient) {
+    Events.on(ConnectionManager, 'apiclientcreated', function (e, apiClient) {
         initializeApiClient(apiClient);
     });
 
@@ -204,4 +205,4 @@
 
     });
 
-})(jQuery, document, Dashboard, LibraryBrowser);
+})(jQuery, document, Dashboard);

@@ -18,7 +18,7 @@
                     <div class="detailSectionContent">
                         <br />
                         <div>
-                            <label for="selectLanguage">${LabelPreferredDisplayLanguage}</label>
+                            <label for="selectLanguage" class="selectLabel">${LabelPreferredDisplayLanguage}</label>
                             <select id="selectLanguage" data-mini="true">
                                 <option value="ar">Arabic</option>
                                 <option value="bg-BG">Bulgarian (Bulgaria)</option>
@@ -37,6 +37,7 @@
                                 <option value="el">Greek</option>
                                 <option value="he">Hebrew</option>
                                 <option value="hu">Hungarian</option>
+                                <option value="id">Indonesian</option>
                                 <option value="it">Italian</option>
                                 <option value="kk">Kazakh</option>
                                 <option value="nb">Norwegian Bokmål</option>
@@ -71,7 +72,7 @@
                     <div class="detailSectionContent">
                         <br />
                         <div>
-                            <label for="selectThemeSong">${LabelEnableThemeSongs}</label>
+                            <label for="selectThemeSong" class="selectLabel">${LabelEnableThemeSongs}</label>
                             <select id="selectThemeSong" data-mini="true">
                                 <option value="">${OptionAuto}</option>
                                 <option value="1">${OptionYes}</option>
@@ -81,7 +82,7 @@
                         </div>
                         <br />
                         <div class="fldEnableBackdrops" style="display:none;">
-                            <label for="selectBackdrop">${LabelEnableBackdrops}</label>
+                            <label for="selectBackdrop" class="selectLabel">${LabelEnableBackdrops}</label>
                             <select id="selectBackdrop" data-mini="true">
                                 <option value="">${OptionAuto}</option>
                                 <option value="1">${OptionYes}</option>
@@ -114,12 +115,10 @@
                     </div>
 
                 </div>
+                <button type="submit" data-role="none" class="clearButton block btnSave hide">
+                    <paper-button raised class="submit block"><iron-icon icon="check"></iron-icon><span>${ButtonSave}</span></paper-button>
+                </button>
 
-                <div>
-                    <button type="submit" data-role="none" class="clearButton">
-                        <paper-button raised class="submit block"><iron-icon icon="check"></iron-icon><span>${ButtonSave}</span></paper-button>
-                    </button>
-                </div>
                 <p>
                     <span style="color:#52B54B;margin-left:.5em;margin-right:.5em;">*</span><span>${LegendTheseSettingsShared}</span>
                 </p>

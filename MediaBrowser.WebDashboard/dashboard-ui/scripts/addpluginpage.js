@@ -91,7 +91,7 @@
                 html += "</div>";
             }
 
-            Events.trigger($('#latestReviews', page).html(html)[0], 'create');
+            $('#latestReviews', page).html(html).trigger('create');
         });
     }
 
@@ -274,9 +274,9 @@
 
             Dashboard.showLoadingMsg();
 
-            var page = $(this).parents('#addPluginPage');
+            var page = $(this).parents('#addPluginPage')[0];
 
-            $('#btnInstall', page).buttonEnabled(false);
+            page.querySelector('#btnInstall').disabled = true;
 
             var name = getParameterByName('name');
             var guid = getParameterByName('guid');

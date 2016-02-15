@@ -39,11 +39,10 @@
                 showLatestItemsPopup: false,
                 shape: getSquareShape(),
                 showTitle: true,
-                defaultAction: 'play',
                 showParentTitle: true,
                 lazy: true,
                 centerText: true,
-                overlayMoreButton: true
+                overlayPlayButton: true
 
             });
             ImageLoader.lazyChildren(elem);
@@ -174,11 +173,10 @@
                 shape: getSquareShape(),
                 showTitle: true,
                 lazy: true,
-                defaultAction: 'play',
                 coverImage: true,
                 showItemCounts: true,
                 centerText: true,
-                overlayMoreButton: true
+                overlayPlayButton: true
 
             });
             ImageLoader.lazyChildren(itemsContainer);
@@ -254,6 +252,8 @@
                 renderMethod = 'renderSongsTab';
                 initMethod = 'initSongsTab';
                 depends.push('scripts/queryfilters');
+                depends.push('paper-icon-item');
+                depends.push('paper-item-body');
                 break;
             case 5:
                 depends.push('scripts/musicgenres');

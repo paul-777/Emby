@@ -124,7 +124,7 @@
 
             li += '</a>';
 
-            li += '<a class="blockedTag btnDeleteTag" href="#" data-tag="' + h + '"></a>';
+            li += '<a class="blockedTag btnDeleteTag" href="#" data-tag="' + h + '" data-icon="delete"></a>';
 
             li += '</li>';
 
@@ -343,18 +343,14 @@
         require(['prompt'], function (prompt) {
 
             prompt({
-                text: Globalize.translate('LabelTag'),
-                title: Globalize.translate('HeaderAddTag'),
-                callback: function(value) {
-                    
-                    if (value) {
-                        var tags = getBlockedTagsFromPage(page);
+                title: Globalize.translate('LabelTag')
 
-                        if (tags.indexOf(value) == -1) {
-                            tags.push(value);
-                            loadBlockedTags(page, tags);
-                        }
-                    }
+            }).then(function (value) {
+                var tags = getBlockedTagsFromPage(page);
+
+                if (tags.indexOf(value) == -1) {
+                    tags.push(value);
+                    loadBlockedTags(page, tags);
                 }
             });
 

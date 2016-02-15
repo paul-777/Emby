@@ -72,9 +72,14 @@ namespace Emby.Drawing.ImageMagick
 
         private void LogVersion()
         {
-            _logger.Info("ImageMagick version: " + Wand.VersionString);
+            _logger.Info("ImageMagick version: " + GetVersion());
             TestWebp();
             Wand.SetMagickThreadCount(1);
+        }
+
+        public static string GetVersion()
+        {
+            return Wand.VersionString;
         }
 
         private bool _webpAvailable = true;
@@ -134,7 +139,7 @@ namespace Emby.Drawing.ImageMagick
                 string.Equals(ext, ".webp", StringComparison.OrdinalIgnoreCase);
         }
 
-        public void EncodeImage(string inputPath, string outputPath, int width, int height, int quality, ImageProcessingOptions options, ImageFormat selectedOutputFormat)
+        public void EncodeImage(string inputPath, string outputPath, bool autoOrient, int width, int height, int quality, ImageProcessingOptions options, ImageFormat selectedOutputFormat)
         {
             // Even if the caller specified 100, don't use it because it takes forever
             quality = Math.Min(quality, 99);
@@ -145,10 +150,15 @@ namespace Emby.Drawing.ImageMagick
                 {
                     ScaleImage(originalImage, width, height);
 
+                    if (autoOrient)
+                    {
+                        AutoOrientImage(originalImage);
+                    }
+
                     DrawIndicator(originalImage, width, height, options);
 
                     originalImage.CurrentImage.CompressionQuality = quality;
-                    //originalImage.CurrentImage.StripImage();
+                    originalImage.CurrentImage.StripImage();
 
                     originalImage.SaveImage(outputPath);
                 }
@@ -161,11 +171,16 @@ namespace Emby.Drawing.ImageMagick
                     {
                         ScaleImage(originalImage, width, height);
 
+                        if (autoOrient)
+                        {
+                            AutoOrientImage(originalImage);
+                        }
+
                         wand.CurrentImage.CompositeImage(originalImage, CompositeOperator.OverCompositeOp, 0, 0);
                         DrawIndicator(wand, width, height, options);
 
                         wand.CurrentImage.CompressionQuality = quality;
-                        //wand.CurrentImage.StripImage();
+                        wand.CurrentImage.StripImage();
 
                         wand.SaveImage(outputPath);
                     }
@@ -174,17 +189,31 @@ namespace Emby.Drawing.ImageMagick
             SaveDelay();
         }
 
+        private void AutoOrientImage(MagickWand wand)
+        {
+            wand.CurrentImage.AutoOrientImage();
+        }
+
+        public static void RotateImage(MagickWand wand, float angle)
+        {
+            using (var pixelWand = new PixelWand("none", 1))
+            {
+                wand.CurrentImage.RotateImage(pixelWand, angle);
+            }
+        }
+
         private void ScaleImage(MagickWand wand, int width, int height)
         {
-            wand.CurrentImage.ResizeImage(width, height);
-            //if (_config.Configuration.EnableHighQualityImageScaling)
-            //{
-            //    wand.CurrentImage.ResizeImage(width, height);
-            //}
-            //else
-            //{
-            //    wand.CurrentImage.ScaleImage(width, height);
-            //}
+            var highQuality = false;
+
+            if (highQuality)
+            {
+                wand.CurrentImage.ResizeImage(width, height);
+            }
+            else
+            {
+                wand.CurrentImage.ScaleImage(width, height);
+            }
         }
 
         /// <summary>

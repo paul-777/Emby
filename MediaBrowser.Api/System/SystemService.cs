@@ -13,6 +13,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using CommonIO;
+using MediaBrowser.Model.Net;
 
 namespace MediaBrowser.Api.System
 {
@@ -28,6 +29,12 @@ namespace MediaBrowser.Api.System
 
     [Route("/System/Info/Public", "GET", Summary = "Gets public information about the server")]
     public class GetPublicSystemInfo : IReturn<PublicSystemInfo>
+    {
+
+    }
+
+    [Route("/System/Ping", "POST")]
+    public class PingSystem : IReturnVoid
     {
 
     }
@@ -59,7 +66,7 @@ namespace MediaBrowser.Api.System
 
     [Route("/System/Endpoint", "GET", Summary = "Gets information about the request endpoint")]
     [Authenticated]
-    public class GetEndpointInfo : IReturn<EndpointInfo>
+    public class GetEndpointInfo : IReturn<EndPointInfo>
     {
         public string Endpoint { get; set; }
     }
@@ -70,12 +77,6 @@ namespace MediaBrowser.Api.System
     {
         [ApiMember(Name = "Name", Description = "The log file name.", IsRequired = true, DataType = "string", ParameterType = "query", Verb = "GET", AllowMultiple = true)]
         public string Name { get; set; }
-    }
-
-    [Route("/System/SupporterInfo", "GET")]
-    [Authenticated]
-    public class GetSupporterInfo : IReturn<SupporterInfo>
-    {
     }
 
     /// <summary>
@@ -110,11 +111,9 @@ namespace MediaBrowser.Api.System
             _security = security;
         }
 
-        public async Task<object> Get(GetSupporterInfo request)
+        public object Post(PingSystem request)
         {
-            var result = await _security.GetSupporterInfo().ConfigureAwait(false);
-
-            return ToOptimizedResult(result);
+            return _appHost.Name;
         }
 
         public object Get(GetServerLogs request)
@@ -212,17 +211,11 @@ namespace MediaBrowser.Api.System
 
         public object Get(GetEndpointInfo request)
         {
-            return ToOptimizedResult(new EndpointInfo
+            return ToOptimizedResult(new EndPointInfo
             {
                 IsLocal = Request.IsLocal,
                 IsInNetwork = _network.IsInLocalNetwork(request.Endpoint ?? Request.RemoteIp)
             });
         }
-    }
-
-    public class EndpointInfo
-    {
-        public bool IsLocal { get; set; }
-        public bool IsInNetwork { get; set; }
     }
 }

@@ -162,6 +162,14 @@ namespace MediaBrowser.Api.Library
         public string Id { get; set; }
     }
 
+    [Route("/Items", "DELETE", Summary = "Deletes an item from the library and file system")]
+    [Authenticated]
+    public class DeleteItems : IReturnVoid
+    {
+        [ApiMember(Name = "Ids", Description = "Ids", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "DELETE")]
+        public string Ids { get; set; }
+    }
+
     [Route("/Items/Counts", "GET")]
     [Authenticated]
     public class GetItemCounts : IReturn<ItemCounts>
@@ -416,7 +424,7 @@ namespace MediaBrowser.Api.Library
 
         public object Get(GetMediaFolders request)
         {
-            var items = _libraryManager.GetUserRootFolder().Children.OrderBy(i => i.SortName).ToList();
+            var items = _libraryManager.GetUserRootFolder().Children.Concat(_libraryManager.RootFolder.VirtualChildren).OrderBy(i => i.SortName).ToList();
 
             if (request.IsHidden.HasValue)
             {
@@ -561,7 +569,7 @@ namespace MediaBrowser.Api.Library
             {
                 throw new ArgumentException("This command cannot be used for remote or virtual items.");
             }
-			if (_fileSystem.DirectoryExists(item.Path))
+            if (_fileSystem.DirectoryExists(item.Path))
             {
                 throw new ArgumentException("This command cannot be used for directories.");
             }
@@ -610,7 +618,7 @@ namespace MediaBrowser.Api.Library
 
             var dtoOptions = GetDtoOptions(request);
 
-            BaseItem parent = item.Parent;
+            BaseItem parent = item.GetParent();
 
             while (parent != null)
             {
@@ -621,7 +629,7 @@ namespace MediaBrowser.Api.Library
 
                 baseItemDtos.Add(_dtoService.GetBaseItemDto(parent, dtoOptions, user));
 
-                parent = parent.Parent;
+                parent = parent.GetParent();
             }
 
             return baseItemDtos.ToList();
@@ -629,7 +637,7 @@ namespace MediaBrowser.Api.Library
 
         private BaseItem TranslateParentItem(BaseItem item, User user)
         {
-            if (item.Parent is AggregateFolder)
+            if (item.GetParent() is AggregateFolder)
             {
                 return user.RootFolder.GetChildren(user, true).FirstOrDefault(i => i.PhysicalLocations.Contains(item.Path));
             }
@@ -677,6 +685,50 @@ namespace MediaBrowser.Api.Library
             return ToOptimizedSerializedResultUsingCache(counts);
         }
 
+        private IList<BaseItem> GetAllLibraryItems(string userId, IUserManager userManager, ILibraryManager libraryManager, string parentId, Func<BaseItem, bool> filter)
+        {
+            if (!string.IsNullOrEmpty(parentId))
+            {
+                var folder = (Folder)libraryManager.GetItemById(new Guid(parentId));
+
+                if (!string.IsNullOrWhiteSpace(userId))
+                {
+                    var user = userManager.GetUserById(userId);
+
+                    if (user == null)
+                    {
+                        throw new ArgumentException("User not found");
+                    }
+
+                    return folder
+                        .GetRecursiveChildren(user, filter)
+                        .ToList();
+                }
+
+                return folder
+                    .GetRecursiveChildren(filter);
+            }
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                var user = userManager.GetUserById(userId);
+
+                if (user == null)
+                {
+                    throw new ArgumentException("User not found");
+                }
+
+                return userManager
+                    .GetUserById(userId)
+                    .RootFolder
+                    .GetRecursiveChildren(user, filter)
+                    .ToList();
+            }
+
+            return libraryManager
+                .RootFolder
+                .GetRecursiveChildren(filter);
+        }
+
         private bool FilterItem(BaseItem item, GetItemCounts request, string userId)
         {
             if (!string.IsNullOrWhiteSpace(userId))
@@ -715,27 +767,47 @@ namespace MediaBrowser.Api.Library
         /// Deletes the specified request.
         /// </summary>
         /// <param name="request">The request.</param>
+        public void Delete(DeleteItems request)
+        {
+            var ids = string.IsNullOrWhiteSpace(request.Ids)
+             ? new string[] { }
+             : request.Ids.Split(',');
+
+            var tasks = ids.Select(i =>
+            {
+                var item = _libraryManager.GetItemById(i);
+                var auth = _authContext.GetAuthorizationInfo(Request);
+                var user = _userManager.GetUserById(auth.UserId);
+
+                if (!item.CanDelete(user))
+                {
+                    if (ids.Length > 1)
+                    {
+                        throw new SecurityException("Unauthorized access");
+                    }
+
+                    return Task.FromResult(true);
+                }
+
+                return item.Delete(new DeleteOptions
+                {
+                    DeleteFileLocation = true
+                });
+            }).ToArray();
+
+            Task.WaitAll(tasks);
+        }
+
+        /// <summary>
+        /// Deletes the specified request.
+        /// </summary>
+        /// <param name="request">The request.</param>
         public void Delete(DeleteItem request)
         {
-            var item = _libraryManager.GetItemById(request.Id);
-            var auth = _authContext.GetAuthorizationInfo(Request);
-            var user = _userManager.GetUserById(auth.UserId);
-
-            if (!item.CanDelete(user))
+            Delete(new DeleteItems
             {
-                throw new SecurityException("Unauthorized access");
-            }
-
-            if (item is ILiveTvRecording)
-            {
-                var task = _liveTv.DeleteRecording(request.Id);
-                Task.WaitAll(task);
-            }
-            else
-            {
-                var task = _libraryManager.DeleteItem(item);
-                Task.WaitAll(task);
-            }
+                Ids = request.Id
+            });
         }
 
         /// <summary>
@@ -817,9 +889,9 @@ namespace MediaBrowser.Api.Library
                                   : (Folder)_libraryManager.RootFolder)
                            : _libraryManager.GetItemById(request.Id);
 
-            while (GetThemeSongIds(item).Count == 0 && request.InheritFromParent && item.Parent != null)
+            while (GetThemeSongIds(item).Count == 0 && request.InheritFromParent && item.GetParent() != null)
             {
-                item = item.Parent;
+                item = item.GetParent();
             }
 
             var dtoOptions = GetDtoOptions(request);
@@ -860,9 +932,9 @@ namespace MediaBrowser.Api.Library
                                   : (Folder)_libraryManager.RootFolder)
                            : _libraryManager.GetItemById(request.Id);
 
-            while (GetThemeVideoIds(item).Count == 0 && request.InheritFromParent && item.Parent != null)
+            while (GetThemeVideoIds(item).Count == 0 && request.InheritFromParent && item.GetParent() != null)
             {
-                item = item.Parent;
+                item = item.GetParent();
             }
 
             var dtoOptions = GetDtoOptions(request);

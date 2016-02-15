@@ -10,14 +10,16 @@ using System.IO;
 using System.Net;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using CommonIO;
 using MediaBrowser.Common.IO;
+using MediaBrowser.Common.Threading;
 
 namespace MediaBrowser.Server.Implementations.Connect
 {
     public class ConnectEntryPoint : IServerEntryPoint
     {
-        private Timer _timer;
+        private PeriodicTimer _timer;
         private readonly IHttpClient _httpClient;
         private readonly IApplicationPaths _appPaths;
         private readonly ILogger _logger;
@@ -40,9 +42,9 @@ namespace MediaBrowser.Server.Implementations.Connect
 
         public void Run()
         {
-            LoadCachedAddress();
+            Task.Run(() => LoadCachedAddress());
 
-            _timer = new Timer(TimerCallback, null, TimeSpan.FromSeconds(5), TimeSpan.FromHours(3));
+            _timer = new PeriodicTimer(TimerCallback, null, TimeSpan.FromSeconds(5), TimeSpan.FromHours(3));
         }
 
         private readonly string[] _ipLookups = { "http://bot.whatismyipaddress.com", "https://connect.emby.media/service/ip" };
@@ -65,7 +67,10 @@ namespace MediaBrowser.Server.Implementations.Connect
                     {
                         Url = ipLookupUrl,
                         UserAgent = "Emby/" + _appHost.ApplicationVersion,
-                        LogErrors = logErrors
+                        LogErrors = logErrors,
+
+                        // Seeing block length errors with our server
+                        EnableHttpCompression = false
 
                     }).ConfigureAwait(false))
                     {

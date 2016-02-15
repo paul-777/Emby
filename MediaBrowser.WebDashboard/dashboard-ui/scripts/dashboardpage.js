@@ -22,8 +22,8 @@
         DashboardPage.pollForInfo(page);
         DashboardPage.startInterval(apiClient);
 
-        $(apiClient).on("websocketmessage", DashboardPage.onWebSocketMessage)
-            .on("websocketopen", DashboardPage.onWebSocketOpen);
+        Events.on(apiClient, 'websocketmessage', DashboardPage.onWebSocketMessage);
+        Events.on(apiClient, 'websocketopen', DashboardPage.onWebSocketOpen);
 
         DashboardPage.lastAppUpdateCheck = null;
         DashboardPage.lastPluginUpdateCheck = null;
@@ -53,7 +53,8 @@
         var apiClient = ApiClient;
 
         if (apiClient) {
-            $(apiClient).off("websocketmessage", DashboardPage.onWebSocketMessage).off("websocketopen", DashboardPage.onWebSocketConnectionChange).off("websocketerror", DashboardPage.onWebSocketConnectionChange).off("websocketclose", DashboardPage.onWebSocketConnectionChange);
+            Events.off(apiClient, 'websocketmessage', DashboardPage.onWebSocketMessage);
+            Events.off(apiClient, 'websocketopen', DashboardPage.onWebSocketOpen);
             DashboardPage.stopInterval(apiClient);
         }
 
@@ -75,7 +76,6 @@
         var list = DashboardPage.sessionsList;
 
         if (list) {
-            Logger.log('refreshSessionsLocally');
             DashboardPage.renderActiveConnections($.mobile.activePage, list);
         }
     },
@@ -297,7 +297,7 @@
 
             html += '<div class="' + className + '" id="' + rowId + '">';
 
-            html += '<div class="cardBox">';
+            html += '<div class="cardBox" style="box-shadow:0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12), 0 3px 1px -2px rgba(0, 0, 0, 0.2);margin:4px;">';
             html += '<div class="cardScalable">';
 
             html += '<div class="cardPadder"></div>';
@@ -1196,7 +1196,8 @@ $(document).on('pageshow', "#dashboardPage", DashboardPage.onPageShow).on('pageb
             return;
         }
 
-        $(apiClient).on('websocketmessage', onSocketMessage).on('websocketopen', onSocketOpen);
+        Events.on(apiClient, 'websocketopen', onSocketOpen);
+        Events.on(apiClient, 'websocketmessage', onSocketMessage);
     }
 
     function startListening(apiClient) {
@@ -1240,7 +1241,8 @@ $(document).on('pageshow', "#dashboardPage", DashboardPage.onPageShow).on('pageb
         var apiClient = ApiClient;
 
         if (apiClient) {
-            $(apiClient).off('websocketopen', onSocketOpen).off('websocketmessage', onSocketOpen);
+            Events.off(apiClient, 'websocketopen', onSocketOpen);
+            Events.off(apiClient, 'websocketmessage', onSocketMessage);
 
             stopListening(apiClient);
         }
@@ -1268,7 +1270,7 @@ $(document).on('pageshow', "#dashboardPage", DashboardPage.onPageShow).on('pageb
 
 (function ($, document, window) {
 
-    var welcomeDismissValue = '11';
+    var welcomeDismissValue = '12';
     var welcomeTourKey = 'welcomeTour';
 
     function dismissWelcome(page, userId) {
@@ -1310,27 +1312,35 @@ $(document).on('pageshow', "#dashboardPage", DashboardPage.onPageShow).on('pageb
 
     function takeTour(page, userId) {
 
-        require(['swipebox'], function () {
+        require(['slideshow'], function () {
 
-            $.swipebox([
-                    { href: 'css/images/tour/dashboard/dashboard.png', title: Globalize.translate('DashboardTourDashboard') },
-                    { href: 'css/images/tour/dashboard/help.png', title: Globalize.translate('DashboardTourHelp') },
-                    { href: 'css/images/tour/dashboard/users.png', title: Globalize.translate('DashboardTourUsers') },
-                    { href: 'css/images/tour/dashboard/sync.png', title: Globalize.translate('DashboardTourSync') },
-                    { href: 'css/images/tour/dashboard/cinemamode.png', title: Globalize.translate('DashboardTourCinemaMode') },
-                    { href: 'css/images/tour/dashboard/chapters.png', title: Globalize.translate('DashboardTourChapters') },
-                    { href: 'css/images/tour/dashboard/subtitles.png', title: Globalize.translate('DashboardTourSubtitles') },
-                    { href: 'css/images/tour/dashboard/plugins.png', title: Globalize.translate('DashboardTourPlugins') },
-                    { href: 'css/images/tour/dashboard/notifications.png', title: Globalize.translate('DashboardTourNotifications') },
-                    { href: 'css/images/tour/dashboard/scheduledtasks.png', title: Globalize.translate('DashboardTourScheduledTasks') },
-                    { href: 'css/images/tour/dashboard/mobile.png', title: Globalize.translate('DashboardTourMobile') },
-                    { href: 'css/images/tour/enjoy.jpg', title: Globalize.translate('MessageEnjoyYourStay') }
-            ], {
-                afterClose: function () {
-                    dismissWelcome(page, userId);
-                    $('.welcomeMessage', page).hide();
-                },
-                hideBarsDelay: 30000
+            var slides = [
+                    { imageUrl: 'css/images/tour/dashboard/dashboard.png', title: Globalize.translate('DashboardTourDashboard') },
+                    { imageUrl: 'css/images/tour/dashboard/help.png', title: Globalize.translate('DashboardTourHelp') },
+                    { imageUrl: 'css/images/tour/dashboard/users.png', title: Globalize.translate('DashboardTourUsers') },
+                    { imageUrl: 'css/images/tour/dashboard/sync.png', title: Globalize.translate('DashboardTourSync') },
+                    { imageUrl: 'css/images/tour/dashboard/cinemamode.png', title: Globalize.translate('DashboardTourCinemaMode') },
+                    { imageUrl: 'css/images/tour/dashboard/chapters.png', title: Globalize.translate('DashboardTourChapters') },
+                    { imageUrl: 'css/images/tour/dashboard/subtitles.png', title: Globalize.translate('DashboardTourSubtitles') },
+                    { imageUrl: 'css/images/tour/dashboard/plugins.png', title: Globalize.translate('DashboardTourPlugins') },
+                    { imageUrl: 'css/images/tour/dashboard/notifications.png', title: Globalize.translate('DashboardTourNotifications') },
+                    { imageUrl: 'css/images/tour/dashboard/scheduledtasks.png', title: Globalize.translate('DashboardTourScheduledTasks') },
+                    { imageUrl: 'css/images/tour/dashboard/mobile.png', title: Globalize.translate('DashboardTourMobile') },
+                    { imageUrl: 'css/images/tour/enjoy.jpg', title: Globalize.translate('MessageEnjoyYourStay') }
+            ];
+
+            require(['slideshow'], function (slideshow) {
+
+                var newSlideShow = new slideshow({
+                    slides: slides,
+                    interactive: true,
+                    loop: false
+                });
+
+                newSlideShow.show();
+
+                dismissWelcome(page, userId);
+                $('.welcomeMessage', page).hide();
             });
         });
     }
@@ -1370,7 +1380,7 @@ $(document).on('pageshow', "#dashboardPage", DashboardPage.onPageShow).on('pageb
 
                 if (!pluginSecurityInfo.IsMBSupporter && AppInfo.enableSupporterMembership) {
 
-                    var html = '<div class="supporterPromotion"><a class="clearLink" href="http://emby.media/premiere" target="_blank" style="font-size:14px;"><paper-button raised class="block" style="text-transform:none;background-color:#52B54B;color:#fff;"><div>' + Globalize.translate('HeaderSupportTheTeam') + '</div><div style="font-weight:normal;margin-top:5px;">' + Globalize.translate('TextEnjoyBonusFeatures') + '</div></paper-button></a></div>';
+                    var html = '<div class="supporterPromotion"><a class="clearLink" href="http://emby.media/premiere" target="_blank"><paper-button raised class="block" style="text-transform:none;background-color:#52B54B;color:#fff;"><div>' + Globalize.translate('HeaderSupportTheTeam') + '</div><div style="font-weight:normal;margin-top:5px;">' + Globalize.translate('TextEnjoyBonusFeatures') + '</div></paper-button></a></div>';
 
                     $('.content-primary', page).append(html);
                 }

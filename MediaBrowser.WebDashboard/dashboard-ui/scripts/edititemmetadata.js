@@ -596,7 +596,7 @@
             html += '</li>';
         }
 
-        elem.html(html).listview('refresh');
+        elem.html(html);
 
         $('.btnDeletePerson', elem).on('click', function () {
 
@@ -716,7 +716,7 @@
         for (var i = 0; i < items.length; i++) {
             html += '<li data-mini="true"><a class="data">' + items[i] + '</a><a href="#" onclick="EditItemMetadataPage.removeElementFromListview(this)" class="btnRemoveFromEditorList"></a></li>';
         }
-        list.html(html).listview('refresh');
+        list.html(html);
     }
 
     function editableListViewValues(list) {
@@ -1008,7 +1008,6 @@
         self.removeElementFromListview = function (source) {
             var list = $(source).parents('ul[data-role="listview"]');
             $(source).parent().remove();
-            list.listview('refresh');
         };
 
         self.onRefreshFormSubmit = function () {
@@ -1090,7 +1089,7 @@
 
                 var page = $.mobile.activePage;
 
-                Logger.log('Item updated - reloading metadata');
+                console.log('Item updated - reloading metadata');
                 reload(page);
             }
         }
@@ -1098,12 +1097,12 @@
 
     function bindItemChanged(page) {
 
-        $(ApiClient).on("websocketmessage", onWebSocketMessageReceived);
+        Events.on(ApiClient, "websocketmessage", onWebSocketMessageReceived);
     }
 
     function unbindItemChanged(page) {
 
-        $(ApiClient).off("websocketmessage", onWebSocketMessageReceived);
+        Events.off(ApiClient, "websocketmessage", onWebSocketMessageReceived);
     }
 
     function onItemDeleted(e, itemId) {
@@ -1146,9 +1145,9 @@
                 ironIcon: 'photo'
             });
 
-            require(['actionsheet'], function () {
+            require(['actionsheet'], function (actionsheet) {
 
-                ActionSheetElement.show({
+                actionsheet.show({
                     items: menuItems,
                     positionTo: elem,
                     callback: function (id) {
@@ -1159,7 +1158,7 @@
                                 performAdvancedRefresh(page);
                                 break;
                             case 'delete':
-                                LibraryBrowser.deleteItem(currentItem.Id);
+                                LibraryBrowser.deleteItems([currentItem.Id]);
                                 break;
                             case 'editimages':
                                 LibraryBrowser.editImages(currentItem.Id);
@@ -1221,13 +1220,13 @@
 
         var page = this;
 
-        $(LibraryBrowser).on('itemdeleting', onItemDeleted);
+        Events.on(LibraryBrowser, 'itemdeleting', onItemDeleted);
         reload(page);
 
     }).on('pagebeforehide', "#editItemMetadataPage", function () {
 
         var page = this;
-        $(LibraryBrowser).off('itemdeleting', onItemDeleted);
+        Events.off(LibraryBrowser, 'itemdeleting', onItemDeleted);
 
         unbindItemChanged(page);
     });

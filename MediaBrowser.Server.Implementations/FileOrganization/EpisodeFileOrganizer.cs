@@ -46,12 +46,12 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
 
         public Task<FileOrganizationResult> OrganizeEpisodeFile(string path, CancellationToken cancellationToken)
         {
-            var options = _config.GetAutoOrganizeOptions().TvOptions;
+            var options = _config.GetAutoOrganizeOptions();
 
             return OrganizeEpisodeFile(path, options, false, cancellationToken);
         }
 
-        public async Task<FileOrganizationResult> OrganizeEpisodeFile(string path, TvFileOrganizationOptions options, bool overwriteExisting, CancellationToken cancellationToken)
+        public async Task<FileOrganizationResult> OrganizeEpisodeFile(string path, AutoOrganizeOptions options, bool overwriteExisting, CancellationToken cancellationToken)
         {
             _logger.Info("Sorting file {0}", path);
 
@@ -74,38 +74,49 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
 
             if (!string.IsNullOrEmpty(seriesName))
             {
-                var season = episodeInfo.SeasonNumber;
+                var seasonNumber = episodeInfo.SeasonNumber;
 
-                result.ExtractedSeasonNumber = season;
+                result.ExtractedSeasonNumber = seasonNumber;
 
-                if (season.HasValue)
+                // Passing in true will include a few extra regex's
+                var episodeNumber = episodeInfo.EpisodeNumber;
+
+                result.ExtractedEpisodeNumber = episodeNumber;
+
+                var premiereDate = episodeInfo.IsByDate ?
+                    new DateTime(episodeInfo.Year.Value, episodeInfo.Month.Value, episodeInfo.Day.Value) :
+                    (DateTime?)null;
+
+                if (episodeInfo.IsByDate || (seasonNumber.HasValue && episodeNumber.HasValue))
                 {
-                    // Passing in true will include a few extra regex's
-                    var episode = episodeInfo.EpisodeNumber;
-
-                    result.ExtractedEpisodeNumber = episode;
-
-                    if (episode.HasValue)
+                    if (episodeInfo.IsByDate)
                     {
-                        _logger.Debug("Extracted information from {0}. Series name {1}, Season {2}, Episode {3}", path, seriesName, season, episode);
-
-                        var endingEpisodeNumber = episodeInfo.EndingEpsiodeNumber;
-
-                        result.ExtractedEndingEpisodeNumber = endingEpisodeNumber;
-
-                        await OrganizeEpisode(path, seriesName, season.Value, episode.Value, endingEpisodeNumber, options, overwriteExisting, result, cancellationToken).ConfigureAwait(false);
+                        _logger.Debug("Extracted information from {0}. Series name {1}, Date {2}", path, seriesName, premiereDate.Value);
                     }
                     else
                     {
-                        var msg = string.Format("Unable to determine episode number from {0}", path);
-                        result.Status = FileSortingStatus.Failure;
-                        result.StatusMessage = msg;
-                        _logger.Warn(msg);
+                        _logger.Debug("Extracted information from {0}. Series name {1}, Season {2}, Episode {3}", path, seriesName, seasonNumber, episodeNumber);
                     }
+
+                    var endingEpisodeNumber = episodeInfo.EndingEpsiodeNumber;
+
+                    result.ExtractedEndingEpisodeNumber = endingEpisodeNumber;
+
+                    await OrganizeEpisode(path,
+                        seriesName,
+                        seasonNumber,
+                        episodeNumber,
+                        endingEpisodeNumber,
+                        premiereDate,
+                        options,
+                        overwriteExisting,
+						false,
+                        result,
+                        cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
-                    var msg = string.Format("Unable to determine season number from {0}", path);
+                    var msg = string.Format("Unable to determine episode number from {0}", path);
                     result.Status = FileSortingStatus.Failure;
                     result.StatusMessage = msg;
                     _logger.Warn(msg);
@@ -135,22 +146,42 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
             return result;
         }
 
-        public async Task<FileOrganizationResult> OrganizeWithCorrection(EpisodeFileOrganizationRequest request, TvFileOrganizationOptions options, CancellationToken cancellationToken)
+        public async Task<FileOrganizationResult> OrganizeWithCorrection(EpisodeFileOrganizationRequest request, AutoOrganizeOptions options, CancellationToken cancellationToken)
         {
             var result = _organizationService.GetResult(request.ResultId);
 
             var series = (Series)_libraryManager.GetItemById(new Guid(request.SeriesId));
 
-            await OrganizeEpisode(result.OriginalPath, series, request.SeasonNumber, request.EpisodeNumber, request.EndingEpisodeNumber, options, true, result, cancellationToken).ConfigureAwait(false);
+            await OrganizeEpisode(result.OriginalPath,
+                series,
+                request.SeasonNumber,
+                request.EpisodeNumber,
+                request.EndingEpisodeNumber,
+                null,
+                options,
+                true,
+				request.RememberCorrection,
+                result,
+                cancellationToken).ConfigureAwait(false);
 
             await _organizationService.SaveResult(result, CancellationToken.None).ConfigureAwait(false);
 
             return result;
         }
 
-        private Task OrganizeEpisode(string sourcePath, string seriesName, int seasonNumber, int episodeNumber, int? endingEpiosdeNumber, TvFileOrganizationOptions options, bool overwriteExisting, FileOrganizationResult result, CancellationToken cancellationToken)
+        private Task OrganizeEpisode(string sourcePath,
+            string seriesName,
+            int? seasonNumber,
+            int? episodeNumber,
+            int? endingEpiosdeNumber,
+            DateTime? premiereDate,
+            AutoOrganizeOptions options,
+            bool overwriteExisting,
+			bool rememberCorrection,
+            FileOrganizationResult result,
+            CancellationToken cancellationToken)
         {
-            var series = GetMatchingSeries(seriesName, result);
+            var series = GetMatchingSeries(seriesName, result, options);
 
             if (series == null)
             {
@@ -161,15 +192,37 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
                 return Task.FromResult(true);
             }
 
-            return OrganizeEpisode(sourcePath, series, seasonNumber, episodeNumber, endingEpiosdeNumber, options, overwriteExisting, result, cancellationToken);
+            return OrganizeEpisode(sourcePath,
+                series,
+                seasonNumber,
+                episodeNumber,
+                endingEpiosdeNumber,
+                premiereDate,
+                options,
+                overwriteExisting,
+				rememberCorrection,
+                result,
+                cancellationToken);
         }
 
-        private async Task OrganizeEpisode(string sourcePath, Series series, int seasonNumber, int episodeNumber, int? endingEpiosdeNumber, TvFileOrganizationOptions options, bool overwriteExisting, FileOrganizationResult result, CancellationToken cancellationToken)
+        private async Task OrganizeEpisode(string sourcePath,
+            Series series,
+            int? seasonNumber,
+            int? episodeNumber,
+            int? endingEpiosdeNumber,
+            DateTime? premiereDate,
+            AutoOrganizeOptions options,
+            bool overwriteExisting,
+			bool rememberCorrection,
+            FileOrganizationResult result,
+            CancellationToken cancellationToken)
         {
             _logger.Info("Sorting file {0} into series {1}", sourcePath, series.Path);
 
+            var originalExtractedSeriesString = result.ExtractedName;
+
             // Proceed to sort the file
-            var newPath = await GetNewPath(sourcePath, series, seasonNumber, episodeNumber, endingEpiosdeNumber, options, cancellationToken).ConfigureAwait(false);
+            var newPath = await GetNewPath(sourcePath, series, seasonNumber, episodeNumber, endingEpiosdeNumber, premiereDate, options.TvOptions, cancellationToken).ConfigureAwait(false);
 
             if (string.IsNullOrEmpty(newPath))
             {
@@ -188,7 +241,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
 
             if (!overwriteExisting)
             {
-                if (options.CopyOriginalFile && fileExists && IsSameEpisode(sourcePath, newPath))
+                if (options.TvOptions.CopyOriginalFile && fileExists && IsSameEpisode(sourcePath, newPath))
                 {
                     _logger.Info("File {0} already copied to new path {1}, stopping organization", sourcePath, newPath);
                     result.Status = FileSortingStatus.SkippedExisting;
@@ -205,7 +258,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
                 }
             }
 
-            PerformFileSorting(options, result);
+            PerformFileSorting(options.TvOptions, result);
 
             if (overwriteExisting)
             {
@@ -238,6 +291,35 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
                         _libraryMonitor.ReportFileSystemChangeComplete(path, true);
                     }
                 }
+            }
+
+            if (rememberCorrection)
+            {
+                SaveSmartMatchString(originalExtractedSeriesString, series, options);
+            }
+        }
+
+        private void SaveSmartMatchString(string matchString, Series series, AutoOrganizeOptions options)
+        {
+            SmartMatchInfo info = options.SmartMatchInfos.FirstOrDefault(i => string.Equals(i.ItemName, series.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (info == null)
+            {
+                info = new SmartMatchInfo();
+                info.ItemName = series.Name;
+                info.OrganizerType = FileOrganizerType.Episode;
+                info.DisplayName = series.Name;
+                var list = options.SmartMatchInfos.ToList();
+                list.Add(info);
+                options.SmartMatchInfos = list.ToArray();
+            }
+
+            if (!info.MatchStrings.Contains(matchString, StringComparer.OrdinalIgnoreCase))
+            {
+                var list = info.MatchStrings.ToList();
+                list.Add(matchString);
+                info.MatchStrings = list.ToArray();
+                _config.SaveAutoOrganizeOptions(options);
             }
         }
 
@@ -278,8 +360,18 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
             }
         }
 
-        private List<string> GetOtherDuplicatePaths(string targetPath, Series series, int seasonNumber, int episodeNumber, int? endingEpisodeNumber)
+        private List<string> GetOtherDuplicatePaths(string targetPath,
+            Series series,
+            int? seasonNumber,
+            int? episodeNumber,
+            int? endingEpisodeNumber)
         {
+            // TODO: Support date-naming?
+            if (!seasonNumber.HasValue || !episodeNumber.HasValue)
+            {
+                return new List<string>();
+            }
+
             var episodePaths = series.GetRecursiveChildren()
                 .OfType<Episode>()
                 .Where(i =>
@@ -379,7 +471,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
             }
         }
 
-        private Series GetMatchingSeries(string seriesName, FileOrganizationResult result)
+        private Series GetMatchingSeries(string seriesName, FileOrganizationResult result, AutoOrganizeOptions options)
         {
             var parsedName = _libraryManager.ParseName(seriesName);
 
@@ -389,13 +481,28 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
             result.ExtractedName = nameWithoutYear;
             result.ExtractedYear = yearInName;
 
-            return _libraryManager.RootFolder.GetRecursiveChildren(i => i is Series)
+            var series = _libraryManager.RootFolder.GetRecursiveChildren(i => i is Series)
                 .Cast<Series>()
                 .Select(i => NameUtils.GetMatchScore(nameWithoutYear, yearInName, i))
                 .Where(i => i.Item2 > 0)
                 .OrderByDescending(i => i.Item2)
                 .Select(i => i.Item1)
                 .FirstOrDefault();
+
+            if (series == null)
+            {
+                SmartMatchInfo info = options.SmartMatchInfos.FirstOrDefault(e => e.MatchStrings.Contains(seriesName, StringComparer.OrdinalIgnoreCase));
+
+                if (info != null)
+                {
+                    series = _libraryManager.RootFolder
+                        .GetRecursiveChildren(i => i is Series)
+                        .Cast<Series>()
+                        .FirstOrDefault(i => string.Equals(i.Name, info.ItemName, StringComparison.OrdinalIgnoreCase));
+                }
+            }
+
+            return series ?? new Series();
         }
 
         /// <summary>
@@ -406,9 +513,18 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
         /// <param name="seasonNumber">The season number.</param>
         /// <param name="episodeNumber">The episode number.</param>
         /// <param name="endingEpisodeNumber">The ending episode number.</param>
+        /// <param name="premiereDate">The premiere date.</param>
         /// <param name="options">The options.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>System.String.</returns>
-        private async Task<string> GetNewPath(string sourcePath, Series series, int seasonNumber, int episodeNumber, int? endingEpisodeNumber, TvFileOrganizationOptions options, CancellationToken cancellationToken)
+        private async Task<string> GetNewPath(string sourcePath,
+            Series series,
+            int? seasonNumber,
+            int? episodeNumber,
+            int? endingEpisodeNumber,
+            DateTime? premiereDate,
+            TvFileOrganizationOptions options,
+            CancellationToken cancellationToken)
         {
             var episodeInfo = new EpisodeInfo
             {
@@ -417,7 +533,8 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
                 MetadataCountryCode = series.GetPreferredMetadataCountryCode(),
                 MetadataLanguage = series.GetPreferredMetadataLanguage(),
                 ParentIndexNumber = seasonNumber,
-                SeriesProviderIds = series.ProviderIds
+                SeriesProviderIds = series.ProviderIds,
+                PremiereDate = premiereDate
             };
 
             var searchResults = await _providerManager.GetRemoteSearchResults<Episode, EpisodeInfo>(new RemoteSearchQuery<EpisodeInfo>
@@ -430,11 +547,24 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
 
             if (episode == null)
             {
-                _logger.Warn("No provider metadata found for {0} season {1} episode {2}", series.Name, seasonNumber, episodeNumber);
+                var msg = string.Format("No provider metadata found for {0} season {1} episode {2}", series.Name, seasonNumber, episodeNumber);
+                _logger.Warn(msg);
                 return null;
             }
 
-            var newPath = GetSeasonFolderPath(series, seasonNumber, options);
+            var episodeName = episode.Name;
+
+            //if (string.IsNullOrWhiteSpace(episodeName))
+            //{
+            //    var msg = string.Format("No provider metadata found for {0} season {1} episode {2}", series.Name, seasonNumber, episodeNumber);
+            //    _logger.Warn(msg);
+            //    return null;
+            //}
+
+            seasonNumber = seasonNumber ?? episode.ParentIndexNumber;
+            episodeNumber = episodeNumber ?? episode.IndexNumber;
+
+            var newPath = GetSeasonFolderPath(series, seasonNumber.Value, options);
 
             // MAX_PATH - trailing <NULL> charachter - drive component: 260 - 1 - 3 = 256
             // Usually newPath would include the drive component, but use 256 to be sure
@@ -449,7 +579,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
             // Remove additional 4 chars to prevent PathTooLongException for downloaded subtitles (eg. filename.ext.eng.srt)
             maxFilenameLength -= 4;
 
-            var episodeFileName = GetEpisodeFileName(sourcePath, series.Name, seasonNumber, episodeNumber, endingEpisodeNumber, episode.Name, options, maxFilenameLength);
+            var episodeFileName = GetEpisodeFileName(sourcePath, series.Name, seasonNumber.Value, episodeNumber.Value, endingEpisodeNumber, episodeName, options, maxFilenameLength);
 
             if (string.IsNullOrEmpty(episodeFileName))
             {
@@ -505,7 +635,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
         {
             seriesName = _fileSystem.GetValidFilename(seriesName).Trim();
 
-            if (episodeTitle == null)
+            if (string.IsNullOrWhiteSpace(episodeTitle))
             {
                 episodeTitle = string.Empty;
             }

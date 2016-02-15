@@ -1,19 +1,27 @@
-﻿(function () {
+﻿define(['paperdialoghelper', 'browser', 'paper-menu', 'paper-dialog', 'scale-up-animation', 'fade-out-animation'], function (paperDialogHelper, browser) {
 
-    function show(options) {
+    function parentWithClass(elem, className) {
 
-        require(['paper-menu', 'paper-dialog', 'paper-dialog-scrollable', 'scale-up-animation', 'fade-out-animation'], function () {
-            showInternal(options);
-        });
+        while (!elem.classList || !elem.classList.contains(className)) {
+            elem = elem.parentNode;
+
+            if (!elem) {
+                return null;
+            }
+        }
+
+        return elem;
     }
 
-    function showInternal(options) {
+    function show(options) {
 
         // items
         // positionTo
         // showCancel
         // title
         var html = '';
+
+        html += '<div style="margin:0;padding:.8em 1em;">';
 
         var windowHeight = $(window).height();
         var pos;
@@ -49,24 +57,20 @@
         }
 
         if (options.title) {
-            html += '<h2>';
+            html += '<h3>';
             html += options.title;
-            html += '</h2>';
+            html += '</h3>';
         }
 
-        // There seems to be a bug with this in safari causing it to immediately roll up to 0 height
-        var isScrollable = !browserInfo.safari;
-
-        if (isScrollable) {
-            html += '<paper-dialog-scrollable>';
-        }
+        var itemsWithIcons = options.items.filter(function (o) {
+            return o.ironIcon;
+        });
 
         // If any items have an icon, give them all an icon just to make sure they're all lined up evenly
-        var renderIcon = options.items.filter(function (o) {
-            return o.ironIcon;
-        }).length;
+        var renderIcon = itemsWithIcons.length;
+        var center = options.title && (!itemsWithIcons.length || itemsWithIcons.length != options.items.length);
 
-        if (options.title && !renderIcon) {
+        if (center) {
             html += '<paper-menu style="text-align:center;">';
         } else {
             html += '<paper-menu>';
@@ -78,19 +82,20 @@
             html += '<paper-menu-item class="actionSheetMenuItem" data-id="' + option.id + '" style="display:block;">';
 
             if (option.ironIcon) {
-                html += '<iron-icon icon="' + option.ironIcon + '"></iron-icon>';
+                if (center) {
+                    html += '<iron-icon style="margin-right:.5em;" icon="' + option.ironIcon + '"></iron-icon>';
+                } else {
+                    html += '<iron-icon icon="' + option.ironIcon + '"></iron-icon>';
+                }
             }
-            else if (renderIcon) {
+            else if (renderIcon && !center) {
                 html += '<iron-icon></iron-icon>';
             }
             html += '<span>' + option.name + '</span>';
             html += '</paper-menu-item>';
         }
         html += '</paper-menu>';
-
-        if (isScrollable) {
-            html += '</paper-dialog-scrollable>';
-        }
+        html += '</div>';
 
         if (options.showCancel) {
             html += '<div class="buttons">';
@@ -98,8 +103,12 @@
             html += '</div>';
         }
 
-        var dlg = document.createElement('paper-dialog');
-        dlg.setAttribute('with-backdrop', 'with-backdrop');
+        var dlg = paperDialogHelper.createDialog({
+            modal: false,
+            entryAnimationDuration: 160,
+            exitAnimationDuration: 200,
+            enableHistory: options.enableHistory
+        });
         dlg.innerHTML = html;
 
         if (pos) {
@@ -107,29 +116,10 @@
             dlg.style.left = pos.left + 'px';
             dlg.style.top = pos.top + 'px';
         }
+
         document.body.appendChild(dlg);
 
-        // The animations flicker in IE
-        if (!browserInfo.msie) {
-            dlg.animationConfig = {
-                // scale up
-                'entry': {
-                    name: 'scale-up-animation',
-                    node: dlg,
-                    timing: { duration: 160, easing: 'ease-out' }
-                },
-                // fade out
-                'exit': {
-                    name: 'fade-out-animation',
-                    node: dlg,
-                    timing: { duration: 200, easing: 'ease-in' }
-                }
-            };
-        }
-
-        setTimeout(function () {
-            dlg.open();
-        }, 50);
+        paperDialogHelper.open(dlg);
 
         // Has to be assigned a z-index after the call to .open() 
         dlg.addEventListener('iron-overlay-closed', function () {
@@ -137,26 +127,30 @@
         });
 
         // Seeing an issue in some non-chrome browsers where this is requiring a double click
-        var eventName = browserInfo.chrome || browserInfo.safari ? 'click' : 'mousedown';
+        var eventName = browser.firefox ? 'mousedown' : 'click';
 
-        $('.actionSheetMenuItem', dlg).on(eventName, function () {
+        dlg.addEventListener(eventName, function (e) {
 
-            var selectedId = this.getAttribute('data-id');
+            var target = parentWithClass(e.target, 'actionSheetMenuItem');
+            if (target) {
 
-            // Add a delay here to allow the click animation to finish, for nice effect
-            setTimeout(function () {
+                var selectedId = target.getAttribute('data-id');
 
-                dlg.close();
+                paperDialogHelper.close(dlg);
 
-                if (options.callback) {
-                    options.callback(selectedId);
-                }
+                // Add a delay here to allow the click animation to finish, for nice effect
+                setTimeout(function () {
 
-            }, 100);
+                    if (options.callback) {
+                        options.callback(selectedId);
+                    }
+
+                }, 100);
+            }
         });
     }
 
-    window.ActionSheetElement = {
+    return {
         show: show
     };
-})();
+});

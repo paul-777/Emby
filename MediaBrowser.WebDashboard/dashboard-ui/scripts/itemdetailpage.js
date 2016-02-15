@@ -1,4 +1,4 @@
-﻿(function ($, document, LibraryBrowser, window) {
+﻿(function ($, document, window) {
 
     var currentItem;
 
@@ -408,7 +408,10 @@
     function renderDetails(page, item, context, isStatic) {
 
         renderSimilarItems(page, item, context);
-        renderSiblingLinks(page, item, context);
+
+        if (!isStatic) {
+            renderSiblingLinks(page, item, context);
+        }
 
         if (item.Taglines && item.Taglines.length) {
             $('.tagline', page).html(item.Taglines[0]).show();
@@ -518,7 +521,7 @@
         }
 
         if (item.ImageOrientation) {
-            attributes.push(createAttribute(Globalize.translate('MediaInfoOrientation'), item.ImageOrientation));
+            //attributes.push(createAttribute(Globalize.translate('MediaInfoOrientation'), item.ImageOrientation));
         }
 
         if (item.IsoSpeedRating) {
@@ -903,7 +906,8 @@
                     shape: getPortraitShape(),
                     showTitle: true,
                     centerText: true,
-                    lazy: true
+                    lazy: true,
+                    overlayPlayButton: true
                 });
             }
             else if (item.Type == "Season") {
@@ -916,7 +920,7 @@
                     overlayText: true,
                     lazy: true,
                     showDetailsMenu: true,
-                    overlayMoreButton: AppInfo.enableAppLayouts
+                    overlayPlayButton: AppInfo.enableAppLayouts
                 });
             }
             else if (item.Type == "GameSystem") {
@@ -1915,7 +1919,7 @@
 
         if (currentItem && currentItem.Id == itemId) {
             if (currentItem.Type == 'Recording') {
-                Dashboard.navigate('livetv.html');
+                LibraryBrowser.showTab('livetv.html', 3);
             } else {
                 Dashboard.navigate('index.html');
             }
@@ -1991,8 +1995,11 @@
         $('.btnRecord,.btnFloatingRecord', page).on('click', function () {
 
             var id = getParameterByName('id');
-
-            Dashboard.navigate('livetvnewrecording.html?programid=' + id);
+            require(['components/recordingcreator/recordingcreator'], function (recordingcreator) {
+                recordingcreator.show(id).then(function () {
+                    reload(page);
+                });
+            });
 
         });
 
@@ -2089,4 +2096,4 @@
 
     window.ItemDetailPage = new itemDetailPage();
 
-})(jQuery, document, LibraryBrowser, window);
+})(jQuery, document, window);

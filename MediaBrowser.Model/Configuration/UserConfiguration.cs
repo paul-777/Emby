@@ -29,8 +29,6 @@ namespace MediaBrowser.Model.Configuration
 
         public bool GroupMoviesIntoBoxSets { get; set; }
 
-        public string[] DisplayChannelsWithinViews { get; set; }
-
         public string[] ExcludeFoldersFromGrouping { get; set; }
         public string[] GroupedFolders { get; set; }
 
@@ -62,8 +60,6 @@ namespace MediaBrowser.Model.Configuration
 
             LatestItemsExcludes = new string[] { };
             OrderedViews = new string[] { };
-            DisplayChannelsWithinViews = new string[] { };
-            DisplayChannelsInline = true;
 
             PlainFolderViews = new string[] { };
 

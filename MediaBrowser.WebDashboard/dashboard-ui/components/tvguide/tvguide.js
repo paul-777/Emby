@@ -15,7 +15,7 @@
 
         var currentDate;
 
-        var defaultChannels = 100;
+        var defaultChannels = browserInfo.mobile ? 50 : 100;
         var channelLimit = 1000;
 
         var channelQuery = {
@@ -66,7 +66,7 @@
             // Subtract to avoid getting programs that are starting when the grid ends
             var nextDay = new Date(date.getTime() + msPerDay - 2000);
 
-            Logger.log(nextDay);
+            console.log(nextDay);
             channelsPromise.then(function (channelsResult) {
 
                 ApiClient.getLiveTvPrograms({
@@ -104,17 +104,17 @@
                     $(channelPaging);
                 }
 
-                Events.on(page.querySelector('.btnNextPage'), 'click', function () {
+                page.querySelector('.btnNextPage').addEventListener('click', function () {
                     channelQuery.StartIndex += channelQuery.Limit;
                     reloadChannels(page);
                 });
 
-                Events.on(page.querySelector('.btnPreviousPage'), 'click', function () {
+                page.querySelector('.btnPreviousPage').addEventListener('click', function () {
                     channelQuery.StartIndex -= channelQuery.Limit;
                     reloadChannels(page);
                 });
 
-                Events.on(page.querySelector('#selectPageSize'), 'change', function () {
+                page.querySelector('#selectPageSize').addEventListener('change', function () {
                     channelQuery.Limit = parseInt(this.value);
                     channelQuery.StartIndex = 0;
                     reloadChannels(page);
@@ -452,9 +452,9 @@
 
         function selectDate(page) {
 
-            require(['actionsheet'], function () {
+            require(['actionsheet'], function (actionsheet) {
 
-                ActionSheetElement.show({
+                actionsheet.show({
                     items: dateOptions,
                     showCancel: true,
                     title: Globalize.translate('HeaderSelectDate'),
@@ -478,9 +478,9 @@
             var tabContent = options.element;
             tabContent.innerHTML = Globalize.translateDocument(template);
 
-            Events.on(tabContent.querySelector('.programGrid'), 'scroll', function () {
+            tabContent.querySelector('.programGrid').addEventListener('scroll', function (e) {
 
-                onProgramGridScroll(tabContent, this);
+                onProgramGridScroll(tabContent, e.target);
             });
 
             if (browserInfo.mobile) {

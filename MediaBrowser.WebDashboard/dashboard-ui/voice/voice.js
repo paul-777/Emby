@@ -1,4 +1,4 @@
-﻿(function () {
+﻿define(['paperdialoghelper'], function (paperDialogHelper) {
 
     var currentRecognition;
 
@@ -87,7 +87,7 @@
 
                 var dlg = currentDialog;
                 if (dlg) {
-                    PaperDialogHelper.close(dlg);
+                    paperDialogHelper.close(dlg);
                 }
 
                 resolve();
@@ -227,16 +227,19 @@
     }
 
     var currentDialog;
-    function showVoiceHelp(paperDialogHelper) {
+    function showVoiceHelp() {
 
         var dlg = paperDialogHelper.createDialog({
             size: 'medium',
             removeOnClose: true
         });
 
+        dlg.classList.add('ui-body-b');
+        dlg.classList.add('background-theme-b');
+
         var html = '';
         html += '<h2 class="dialogHeader">';
-        html += '<paper-fab icon="arrow-back" mini class="btnCancelVoiceInput"></paper-fab>';
+        html += '<paper-fab icon="arrow-back" mini class="btnCancelVoiceInput" tabindex="-1"></paper-fab>';
         html += '</h2>';
 
         html += '<div>';
@@ -359,7 +362,7 @@
         currentRecognition = recognition;
 
         if (createUI !== false) {
-            require(['components/paperdialoghelper', 'paper-fab', 'css!voice/voice.css'], showVoiceHelp);
+            require(['paper-fab', 'css!voice/voice.css'], showVoiceHelp);
         }
     }
 
@@ -368,10 +371,8 @@
         isSupported: function () {
 
             if (AppInfo.isNativeApp) {
-                // Crashes on some amazon devices
-                if (window.device && (device.platform || '').toLowerCase().indexOf('amazon') != -1) {
-                    return false;
-                }
+                // TODO: Only return false for crosswalk
+                return false;
             }
 
             return window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -380,4 +381,4 @@
         startListening: startListening
     };
 
-})();
+});

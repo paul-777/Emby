@@ -56,7 +56,18 @@ namespace MediaBrowser.Providers.TV
 
         private const string SeriesSearchUrl = "http://www.thetvdb.com/api/GetSeries.php?seriesname={0}&language={1}";
         private const string SeriesGetZip = "http://www.thetvdb.com/api/{0}/series/{1}/all/{2}.zip";
-        private const string SeriesGetZipByImdbId = "http://www.thetvdb.com/api/{0}/GetSeriesByRemoteID.php?imdbid={1}&language={2}";
+        private const string GetSeriesByImdbId = "http://www.thetvdb.com/api/GetSeriesByRemoteID.php?imdbid={0}&language={1}";
+
+        private string NormalizeLanguage(string language)
+        {
+            if (string.IsNullOrWhiteSpace(language))
+            {
+                return language;
+            }
+
+            // pt-br is just pt to tvdb
+            return language.Split('-')[0].ToLower();
+        }
 
         public async Task<IEnumerable<RemoteSearchResult>> GetSearchResults(SeriesInfo searchInfo, CancellationToken cancellationToken)
         {
@@ -161,9 +172,7 @@ namespace MediaBrowser.Providers.TV
 
             var seriesDataPath = GetSeriesDataPath(_config.ApplicationPaths, seriesProviderIds);
 
-            var seriesXmlFilename = metadataLanguage.ToLower() + ".xml";
-
-            var seriesXmlPath = Path.Combine(seriesDataPath, seriesXmlFilename);
+			var seriesXmlPath = GetSeriesXmlPath (seriesProviderIds, metadataLanguage);
             var actorsXmlPath = Path.Combine(seriesDataPath, "actors.xml");
 
             FetchSeriesInfo(series, seriesXmlPath, cancellationToken);
@@ -219,9 +228,17 @@ namespace MediaBrowser.Providers.TV
                 throw new ArgumentNullException("seriesId");
             }
 
-            var url = string.Equals(idType, "tvdb", StringComparison.OrdinalIgnoreCase) ?
-                string.Format(SeriesGetZip, TVUtils.TvdbApiKey, seriesId, preferredMetadataLanguage) :
-                string.Format(SeriesGetZipByImdbId, TVUtils.TvdbApiKey, seriesId, preferredMetadataLanguage);
+            if (!string.Equals(idType, "tvdb", StringComparison.OrdinalIgnoreCase))
+            {
+                seriesId = await GetSeriesByRemoteId(seriesId, idType, preferredMetadataLanguage, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (string.IsNullOrWhiteSpace(seriesId))
+            {
+                throw new ArgumentNullException("seriesId");
+            }
+
+            var url = string.Format(SeriesGetZip, TVUtils.TvdbApiKey, seriesId, NormalizeLanguage(preferredMetadataLanguage));
 
             using (var zipStream = await _httpClient.Get(new HttpRequestOptions
             {
@@ -251,7 +268,7 @@ namespace MediaBrowser.Providers.TV
                 await SanitizeXmlFile(file).ConfigureAwait(false);
             }
 
-            var downloadLangaugeXmlFile = Path.Combine(seriesDataPath, preferredMetadataLanguage + ".xml");
+            var downloadLangaugeXmlFile = Path.Combine(seriesDataPath, NormalizeLanguage(preferredMetadataLanguage) + ".xml");
             var saveAsLanguageXmlFile = Path.Combine(seriesDataPath, saveAsMetadataLanguage + ".xml");
 
             if (!string.Equals(downloadLangaugeXmlFile, saveAsLanguageXmlFile, StringComparison.OrdinalIgnoreCase))
@@ -260,6 +277,39 @@ namespace MediaBrowser.Providers.TV
             }
 
             await ExtractEpisodes(seriesDataPath, downloadLangaugeXmlFile, lastTvDbUpdateTime).ConfigureAwait(false);
+        }
+
+        private async Task<string> GetSeriesByRemoteId(string id, string idType, string language, CancellationToken cancellationToken)
+        {
+            var url = string.Format(GetSeriesByImdbId, id, NormalizeLanguage(language));
+
+            using (var result = await _httpClient.Get(new HttpRequestOptions
+            {
+                Url = url,
+                ResourcePool = TvDbResourcePool,
+                CancellationToken = cancellationToken
+
+            }).ConfigureAwait(false))
+            {
+                var doc = new XmlDocument();
+                doc.Load(result);
+
+                if (doc.HasChildNodes)
+                {
+                    var node = doc.SelectSingleNode("//Series/seriesid");
+
+                    if (node != null)
+                    {
+                        var idResult = node.InnerText;
+
+                        _logger.Info("Tvdb GetSeriesByRemoteId produced id of {0}", idResult ?? string.Empty);
+
+                        return idResult;
+                    }
+                }
+            }
+
+            return null;
         }
 
         public TvdbOptions GetTvDbOptions()
@@ -290,38 +340,48 @@ namespace MediaBrowser.Providers.TV
             return false;
         }
 
+        private SemaphoreSlim _ensureSemaphore = new SemaphoreSlim(1,1);
         internal async Task<string> EnsureSeriesInfo(Dictionary<string, string> seriesProviderIds, string preferredMetadataLanguage, CancellationToken cancellationToken)
         {
-            string seriesId;
-            if (seriesProviderIds.TryGetValue(MetadataProviders.Tvdb.ToString(), out seriesId))
-            {
-                var seriesDataPath = GetSeriesDataPath(_config.ApplicationPaths, seriesProviderIds);
+            await _ensureSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-                // Only download if not already there
-                // The post-scan task will take care of updates so we don't need to re-download here
-                if (!IsCacheValid(seriesDataPath, preferredMetadataLanguage))
+            try
+            {
+                string seriesId;
+                if (seriesProviderIds.TryGetValue(MetadataProviders.Tvdb.ToString(), out seriesId))
                 {
-                    await DownloadSeriesZip(seriesId, MetadataProviders.Tvdb.ToString(), seriesDataPath, null, preferredMetadataLanguage, cancellationToken).ConfigureAwait(false);
+                    var seriesDataPath = GetSeriesDataPath(_config.ApplicationPaths, seriesProviderIds);
+
+                    // Only download if not already there
+                    // The post-scan task will take care of updates so we don't need to re-download here
+                    if (!IsCacheValid(seriesDataPath, preferredMetadataLanguage))
+                    {
+                        await DownloadSeriesZip(seriesId, MetadataProviders.Tvdb.ToString(), seriesDataPath, null, preferredMetadataLanguage, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    return seriesDataPath;
                 }
 
-                return seriesDataPath;
-            }
-
-            if (seriesProviderIds.TryGetValue(MetadataProviders.Imdb.ToString(), out seriesId))
-            {
-                var seriesDataPath = GetSeriesDataPath(_config.ApplicationPaths, seriesProviderIds);
-
-                // Only download if not already there
-                // The post-scan task will take care of updates so we don't need to re-download here
-                if (!IsCacheValid(seriesDataPath, preferredMetadataLanguage))
+                if (seriesProviderIds.TryGetValue(MetadataProviders.Imdb.ToString(), out seriesId))
                 {
-                    await DownloadSeriesZip(seriesId, MetadataProviders.Imdb.ToString(), seriesDataPath, null, preferredMetadataLanguage, cancellationToken).ConfigureAwait(false);
+                    var seriesDataPath = GetSeriesDataPath(_config.ApplicationPaths, seriesProviderIds);
+
+                    // Only download if not already there
+                    // The post-scan task will take care of updates so we don't need to re-download here
+                    if (!IsCacheValid(seriesDataPath, preferredMetadataLanguage))
+                    {
+                        await DownloadSeriesZip(seriesId, MetadataProviders.Imdb.ToString(), seriesDataPath, null, preferredMetadataLanguage, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    return seriesDataPath;
                 }
 
-                return seriesDataPath;
+                return null;
             }
-
-            return null;
+            finally
+            {
+                _ensureSemaphore.Release();
+            }
         }
 
         private bool IsCacheValid(string seriesDataPath, string preferredMetadataLanguage)
@@ -406,7 +466,7 @@ namespace MediaBrowser.Providers.TV
 
         private async Task<IEnumerable<RemoteSearchResult>> FindSeriesInternal(string name, string language, CancellationToken cancellationToken)
         {
-            var url = string.Format(SeriesSearchUrl, WebUtility.UrlEncode(name), language.ToLower());
+            var url = string.Format(SeriesSearchUrl, WebUtility.UrlEncode(name), NormalizeLanguage(language));
             var doc = new XmlDocument();
 
             using (var results = await _httpClient.Get(new HttpRequestOptions
@@ -774,6 +834,21 @@ namespace MediaBrowser.Providers.TV
                         case "Role":
                             {
                                 personInfo.Role = (reader.ReadElementContentAsString() ?? string.Empty).Trim();
+                                break;
+                            }
+
+                        case "id":
+                            {
+                                break;
+                            }
+
+                        case "Image":
+                            {
+                                var url = (reader.ReadElementContentAsString() ?? string.Empty).Trim();
+                                if (!string.IsNullOrWhiteSpace(url))
+                                {
+                                    personInfo.ImageUrl = TVUtils.BannerUrl + url;
+                                }
                                 break;
                             }
 
@@ -1241,6 +1316,15 @@ namespace MediaBrowser.Providers.TV
 
             return null;
         }
+
+		public string GetSeriesXmlPath(Dictionary<string, string> seriesProviderIds, string language)
+		{
+			var seriesDataPath = GetSeriesDataPath(_config.ApplicationPaths, seriesProviderIds);
+
+			var seriesXmlFilename = language.ToLower() + ".xml";
+
+			return Path.Combine (seriesDataPath, seriesXmlFilename);
+		}
 
         /// <summary>
         /// Gets the series data path.

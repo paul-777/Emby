@@ -44,7 +44,7 @@
 }
 
 .cardBox {
-    margin: 2px;
+    margin: 1px;
 }
 
 @media all and (max-width: 800px) {
@@ -52,10 +52,6 @@
     .cardBox {
         margin: 1px;
     }
-}
-
-.largeCardMargin .cardBox {
-    margin: 10px;
 }
 
 .defaultBackground .cardImage {
@@ -70,14 +66,17 @@
     border-radius: 2px;
 }
 
-.cardOverlayMoreButton, .cardOverlayPlayButton {
+.cardOverlayButtonContainer {
     position: absolute;
     bottom: 0;
     right: 0;
+    padding: 1em .5em .5em 1em;
+}
+
+.cardOverlayMoreButton, .cardOverlayPlayButton {
     color: #333;
     background-color: rgba(210,210,210,.9);
     border-radius: 500px;
-    margin: 0 .3em .3em 0;
     padding: 5px;
     width: 36px;
     height: 36px;
@@ -213,7 +212,6 @@
     padding: 10px !important;
     margin: 0 !important;
     color: inherit;
-    font-size: 20px;
 }
 
 .cardText {
@@ -224,10 +222,6 @@
     padding: 5px 5px 2px;
     font-weight: 400;
     line-height: 1.4;
-}
-
-.homeTopViews .cardText {
-    font-size: 15px;
 }
 
 .cardButtonContainer {
@@ -294,6 +288,10 @@
     background-position: center center;
 }
 
+    .coveredCardImage.noScale {
+        background-size: cover;
+    }
+
 .centeredCardImage {
     background-position: center center;
 }
@@ -331,7 +329,7 @@
 }
 
 .portraitCard {
-    width: 33.334%;
+    width: 33.333%;
 }
 
 .overflowPortraitCard {
@@ -376,11 +374,11 @@
 @media all and (min-width: 500px) {
 
     .smallBackdropCard {
-        width: 33.334%;
+        width: 33.333%;
     }
 
     .squareCard {
-        width: 33.334%;
+        width: 33.333%;
     }
 }
 
@@ -411,7 +409,7 @@
 
 @media all and (min-width: 770px) {
     .backdropCard {
-        width: 33.334%;
+        width: 33.333%;
     }
 }
 
@@ -470,7 +468,7 @@
     }
 
     .bannerCard {
-        width: 33.334%;
+        width: 33.333%;
     }
 
     .portraitCard {
@@ -569,7 +567,7 @@
 @media all and (min-width: 800px) {
 
     .detailPage169Card {
-        width: 33.334%;
+        width: 33.333%;
     }
 }
 
@@ -588,7 +586,7 @@
 
 
 .detailPagePortraitCard {
-    width: 33.334%;
+    width: 33.333%;
 }
 
 @media all and (min-width: 540px) {
@@ -614,7 +612,7 @@
 
 
 .detailPageSquareCard {
-    width: 33.334%;
+    width: 33.333%;
 }
 
 @media all and (min-width: 540px) {
@@ -637,7 +635,7 @@
 @media all and (min-width: 540px) {
 
     .homePageSmallBackdropCard {
-        width: 33.334%;
+        width: 33.333%;
     }
 }
 

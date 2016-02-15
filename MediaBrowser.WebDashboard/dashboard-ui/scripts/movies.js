@@ -72,7 +72,6 @@
             page.querySelector('.listTopPaging').innerHTML = pagingHtml;
 
             updateFilterControls(page);
-            var trigger = false;
 
             if (view == "Thumb") {
                 html = LibraryBrowser.getPosterViewHtml({
@@ -80,7 +79,8 @@
                     shape: "backdrop",
                     preferThumb: true,
                     lazy: true,
-                    showDetailsMenu: true
+                    showDetailsMenu: true,
+                    overlayPlayButton: true
                 });
             }
             else if (view == "ThumbCard") {
@@ -112,7 +112,6 @@
                     items: result.Items,
                     sortBy: query.SortBy
                 });
-                trigger = true;
             }
             else if (view == "Poster") {
                 html = LibraryBrowser.getPosterViewHtml({
@@ -120,7 +119,8 @@
                     shape: "portrait",
                     centerText: true,
                     lazy: true,
-                    showDetailsMenu: true
+                    showDetailsMenu: true,
+                    overlayPlayButton: true
                 });
             }
             else if (view == "PosterCard") {
@@ -149,10 +149,6 @@
             var elem = page.querySelector('.itemsContainer');
             elem.innerHTML = html + pagingHtml;
             ImageLoader.lazyChildren(elem);
-
-            if (trigger) {
-                Events.trigger(elem, 'create');
-            }
 
             $('.btnNextPage', page).on('click', function () {
                 query.StartIndex += query.Limit;

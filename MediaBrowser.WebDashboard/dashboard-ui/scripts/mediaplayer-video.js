@@ -77,11 +77,14 @@
                 return currentStream.Type == "Subtitle";
             });
 
-            var currentIndex = self.currentSubtitleStreamIndex || -1;
+            var currentIndex = self.currentSubtitleStreamIndex;
+            if (currentIndex == null) {
+                currentIndex = -1;
+            }
 
             streams.unshift({
                 Index: -1,
-                Language: "Off"
+                Language: Globalize.translate('ButtonOff')
             });
 
             var menuItems = streams.map(function (stream) {
@@ -118,10 +121,12 @@
                 return opt;
             });
 
-            require(['actionsheet'], function () {
+            require(['actionsheet'], function (actionsheet) {
 
-                ActionSheetElement.show({
+                actionsheet.show({
                     items: menuItems,
+                    // history.back() will cause the video player to stop
+                    enableHistory: false,
                     positionTo: $('.videoSubtitleButton')[0],
                     callback: function (id) {
 
@@ -137,43 +142,44 @@
 
         self.showQualityFlyout = function () {
 
-            var currentSrc = self.getCurrentSrc(self.currentMediaRenderer).toLowerCase();
-            var isStatic = currentSrc.indexOf('static=true') != -1;
+            require(['qualityoptions', 'actionsheet'], function (qualityoptions, actionsheet) {
 
-            var videoStream = self.currentMediaSource.MediaStreams.filter(function (stream) {
-                return stream.Type == "Video";
-            })[0];
-            var videoWidth = videoStream ? videoStream.Width : null;
-            var videoHeight = videoStream ? videoStream.Height : null;
+                var currentSrc = self.getCurrentSrc(self.currentMediaRenderer).toLowerCase();
+                var isStatic = currentSrc.indexOf('static=true') != -1;
 
-            var options = self.getVideoQualityOptions(videoWidth, videoHeight);
+                var videoStream = self.currentMediaSource.MediaStreams.filter(function (stream) {
+                    return stream.Type == "Video";
+                })[0];
+                var videoWidth = videoStream ? videoStream.Width : null;
 
-            if (isStatic) {
-                options[0].name = "Direct";
-            }
+                var options = qualityoptions.getVideoQualityOptions(AppSettings.maxStreamingBitrate(), videoWidth);
 
-            var menuItems = options.map(function (o) {
-
-                var opt = {
-                    name: o.name,
-                    id: o.bitrate
-                };
-
-                if (o.selected) {
-                    opt.ironIcon = "check";
+                if (isStatic) {
+                    options[0].name = "Direct";
                 }
 
-                return opt;
-            });
+                var menuItems = options.map(function (o) {
 
-            var selectedId = options.filter(function (o) {
-                return o.selected;
-            });
-            selectedId = selectedId.length ? selectedId[0].bitrate : null;
-            require(['actionsheet'], function () {
+                    var opt = {
+                        name: o.name,
+                        id: o.bitrate
+                    };
 
-                ActionSheetElement.show({
+                    if (o.selected) {
+                        opt.ironIcon = "check";
+                    }
+
+                    return opt;
+                });
+
+                var selectedId = options.filter(function (o) {
+                    return o.selected;
+                });
+                selectedId = selectedId.length ? selectedId[0].bitrate : null;
+                actionsheet.show({
                     items: menuItems,
+                    // history.back() will cause the video player to stop
+                    enableHistory: false,
                     positionTo: $('.videoQualityButton')[0],
                     callback: function (id) {
 
@@ -234,10 +240,12 @@
                 return opt;
             });
 
-            require(['actionsheet'], function () {
+            require(['actionsheet'], function (actionsheet) {
 
-                ActionSheetElement.show({
+                actionsheet.show({
                     items: menuItems,
+                    // history.back() will cause the video player to stop
+                    enableHistory: false,
                     positionTo: $('.videoAudioButton')[0],
                     callback: function (id) {
 
@@ -605,6 +613,7 @@
         self.onQualityOptionSelected = function (bitrate) {
 
             AppSettings.maxStreamingBitrate(bitrate);
+            AppSettings.enableAutomaticBitrateDetection(false);
 
             self.changeStream(self.getCurrentTicks(), {
                 Bitrate: bitrate
@@ -734,6 +743,7 @@
 
             html += '<paper-slider pin step="1" min="0" max="100" value="0" class="videoVolumeSlider" style="width:100px;vertical-align:middle;margin-left:-1em;margin-right:2em;display:inline-block;"></paper-slider>';
 
+            html += '<paper-icon-button icon="cast" class="mediaButton castButton" onclick="MediaController.showPlayerSelection(this, false);" style="width:32px;height:32px;"></paper-icon-button>';
             html += '<paper-icon-button icon="fullscreen" class="mediaButton fullscreenButton" onclick="MediaPlayer.toggleFullscreen();" id="video-fullscreenButton"></paper-icon-button>';
             html += '<paper-icon-button icon="info" class="mediaButton infoButton" onclick="MediaPlayer.toggleInfo();"></paper-icon-button>';
             //html += '<paper-icon-button icon="dvr" class="mediaButton guideButton" onclick="MediaPlayer.toggleGuide();"></paper-icon-button>';
@@ -880,6 +890,15 @@
 
         function bindEventsForPlayback(mediaRenderer) {
 
+            Events.on(mediaRenderer, 'playing', onOnePlaying);
+            Events.on(mediaRenderer, 'playing', onPlaying);
+            Events.on(mediaRenderer, 'volumechange', onVolumeChange);
+            Events.on(mediaRenderer, 'pause', onPause);
+            Events.on(mediaRenderer, 'timeupdate', onTimeUpdate);
+            Events.on(mediaRenderer, 'error', onError);
+            Events.on(mediaRenderer, 'click', onClick);
+            Events.on(mediaRenderer, 'dblclick', onDoubleClick);
+
             var hideElementsOnIdle = true;
 
             if (hideElementsOnIdle) {
@@ -907,6 +926,16 @@
         }
 
         function unbindEventsForPlayback(mediaRenderer) {
+
+            Events.off(mediaRenderer, 'playing', onOnePlaying);
+            Events.off(mediaRenderer, 'playing', onPlaying);
+            Events.off(mediaRenderer, 'volumechange', onVolumeChange);
+
+            Events.off(mediaRenderer, 'pause', onPause);
+            Events.off(mediaRenderer, 'timeupdate', onTimeUpdate);
+            Events.off(mediaRenderer, 'error', onError);
+            Events.off(mediaRenderer, 'click', onClick);
+            Events.off(mediaRenderer, 'dblclick', onDoubleClick);
 
             $(document).off('webkitfullscreenchange', onFullScreenChange);
             $(document).off('mozfullscreenchange', onFullScreenChange);
@@ -946,19 +975,23 @@
 
                 self.createStreamInfo('Video', item, mediaSource, startPosition).then(function (streamInfo) {
 
+                    var isHls = streamInfo.url.toLowerCase().indexOf('.m3u8') != -1;
+
                     // Huge hack alert. Safari doesn't seem to like if the segments aren't available right away when playback starts
                     // This will start the transcoding process before actually feeding the video url into the player
-                    if (browserInfo.safari && !mediaSource.RunTimeTicks) {
+                    // Edit: Also seeing stalls from hls.js
+                    if ((browserInfo.safari || browserInfo.msie || browserInfo.firefox) && !mediaSource.RunTimeTicks && isHls) {
 
                         Dashboard.showLoadingMsg();
-
+                        var hlsPlaylistUrl = streamInfo.url.replace('master.m3u8', 'live.m3u8');
                         ApiClient.ajax({
 
                             type: 'GET',
-                            url: streamInfo.url.replace('master.m3u8', 'live.m3u8')
+                            url: hlsPlaylistUrl
 
                         }).then(function () {
                             Dashboard.hideLoadingMsg();
+                            streamInfo.url = hlsPlaylistUrl;
                             self.playVideoInternal(item, mediaSource, startPosition, streamInfo, callback);
                         }, function () {
                             Dashboard.hideLoadingMsg();
@@ -981,10 +1014,10 @@
                 elem.classList.add('hide');
             };
 
-            if (!browserInfo.animate) {
-                onfinish();
-                return;
-            }
+            //if (!browserInfo.animate) {
+            onfinish();
+            return;
+            //}
 
             requestAnimationFrame(function () {
                 var keyframes = [
@@ -1003,7 +1036,7 @@
 
             elem.classList.remove('hide');
 
-            if (!browserInfo.animate) {
+            if (!browserInfo.animate || browserInfo.mobile) {
                 return;
             }
 
@@ -1091,77 +1124,6 @@
             volumeSlider.value = initialVolume * 100;
             updateVolumeButtons(initialVolume);
 
-            $(mediaRenderer).on("volumechange.mediaplayerevent", function (e) {
-
-                updateVolumeButtons(this.volume());
-
-            }).one("playing.mediaplayerevent", function () {
-
-                // For some reason this is firing at the start, so don't bind until playback has begun
-                $(this).on("ended", self.onPlaybackStopped).one('ended', self.playNextAfterEnded);
-
-                self.onPlaybackStart(this, item, mediaSource);
-
-            }).on("pause.mediaplayerevent", function (e) {
-
-                $('#video-playButton', videoControls).show();
-                $('#video-pauseButton', videoControls).hide();
-                $("#pause", videoElement).show().addClass("fadeOut");
-                setTimeout(function () {
-                    $("#pause", videoElement).hide().removeClass("fadeOut");
-                }, 300);
-
-            }).on("playing.mediaplayerevent", function (e) {
-
-                $('#video-playButton', videoControls).hide();
-                $('#video-pauseButton', videoControls).show();
-                $("#play", videoElement).show().addClass("fadeOut");
-                setTimeout(function () {
-                    $("#play", videoElement).hide().removeClass("fadeOut");
-                }, 300);
-
-            }).on("timeupdate.mediaplayerevent", function () {
-
-                if (!positionSlider.dragging) {
-
-                    self.setCurrentTime(self.getCurrentTicks(this), positionSlider, currentTimeElement);
-                }
-
-            }).on("error.mediaplayerevent", function () {
-
-                var errorMsg = Globalize.translate('MessageErrorPlayingVideo');
-
-                if (item.Type == "TvChannel") {
-                    errorMsg += '<p>';
-                    errorMsg += Globalize.translate('MessageEnsureOpenTuner');
-                    errorMsg += '</p>';
-                }
-
-                Dashboard.alert({
-                    title: Globalize.translate('HeaderVideoError'),
-                    message: errorMsg
-                });
-
-                self.onPlaybackStopped.call(mediaRenderer);
-                self.nextTrack();
-
-            }).on("click.mediaplayerevent", function (e) {
-
-                if (!browserInfo.mobile) {
-                    if (this.paused()) {
-                        self.unpause();
-                    } else {
-                        self.pause();
-                    }
-                }
-
-            }).on("dblclick.mediaplayerevent", function () {
-
-                if (!browserInfo.mobile) {
-                    self.toggleFullscreen();
-                }
-            });
-
             bindEventsForPlayback(mediaRenderer);
 
             self.currentSubtitleStreamIndex = mediaSource.DefaultSubtitleStreamIndex;
@@ -1185,6 +1147,94 @@
                 }
             });
         };
+
+        function onOnePlaying() {
+
+            Events.off(this, 'playing', onOnePlaying);
+
+            // For some reason this is firing at the start, so don't bind until playback has begun
+            Events.on(this, 'ended', self.onPlaybackStopped);
+            Events.on(this, 'ended', self.playNextAfterEnded);
+
+            self.onPlaybackStart(this, self.currentItem, self.currentMediaSource);
+        }
+
+        function onPlaying() {
+
+            var videoControls = document.querySelector('#videoPlayer .videoControls');
+            var videoElement = document.querySelector('#videoPlayer #videoElement');
+
+            $('#video-playButton', videoControls).hide();
+            $('#video-pauseButton', videoControls).show();
+            $("#play", videoElement).show().addClass("fadeOut");
+            setTimeout(function () {
+                $("#play", videoElement).hide().removeClass("fadeOut");
+            }, 300);
+        }
+
+        function onVolumeChange() {
+
+            updateVolumeButtons(this.volume());
+        }
+
+        function onPause() {
+
+            var videoControls = document.querySelector('#videoPlayer .videoControls');
+            var videoElement = document.querySelector('#videoPlayer #videoElement');
+
+            $('#video-playButton', videoControls).show();
+            $('#video-pauseButton', videoControls).hide();
+            $("#pause", videoElement).show().addClass("fadeOut");
+            setTimeout(function () {
+                $("#pause", videoElement).hide().removeClass("fadeOut");
+            }, 300);
+        }
+
+        function onTimeUpdate() {
+            if (!positionSlider.dragging) {
+
+                self.setCurrentTime(self.getCurrentTicks(this), positionSlider, currentTimeElement);
+            }
+        }
+
+        function onError() {
+            var errorMsg = Globalize.translate('MessageErrorPlayingVideo');
+
+            var item = self.currentItem;
+            if (item && item.Type == "TvChannel") {
+                errorMsg += '<p>';
+                errorMsg += Globalize.translate('MessageEnsureOpenTuner');
+                errorMsg += '</p>';
+            }
+
+            Dashboard.alert({
+                title: Globalize.translate('HeaderVideoError'),
+                message: errorMsg
+            });
+
+            var mediaRenderer = self.currentMediaRenderer;
+            if (mediaRenderer) {
+                self.onPlaybackStopped.call(mediaRenderer);
+            }
+            self.nextTrack();
+        }
+
+        function onClick() {
+
+            if (!browserInfo.mobile) {
+                if (this.paused()) {
+                    self.unpause();
+                } else {
+                    self.pause();
+                }
+            }
+        }
+
+        function onDoubleClick() {
+            if (!browserInfo.mobile) {
+                self.toggleFullscreen();
+            }
+        }
 
         self.updatePlaylistUi = function () {
 

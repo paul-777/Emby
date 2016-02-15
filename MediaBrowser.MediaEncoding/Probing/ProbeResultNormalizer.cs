@@ -1,5 +1,4 @@
 ﻿using MediaBrowser.Common.IO;
-using MediaBrowser.MediaInfo;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Extensions;
@@ -26,7 +25,7 @@ namespace MediaBrowser.MediaEncoding.Probing
             _fileSystem = fileSystem;
         }
 
-        public Model.MediaInfo.MediaInfo GetMediaInfo(InternalMediaInfoResult data, VideoType videoType, bool isAudio, string path, MediaProtocol protocol)
+        public MediaInfo GetMediaInfo(InternalMediaInfoResult data, VideoType videoType, bool isAudio, string path, MediaProtocol protocol)
         {
             var info = new Model.MediaInfo.MediaInfo
             {
@@ -104,13 +103,6 @@ namespace MediaBrowser.MediaEncoding.Probing
                 }
 
                 ExtractTimestamp(info);
-
-                var videoStream = info.MediaStreams.FirstOrDefault(i => i.Type == MediaStreamType.Video);
-
-                if (videoStream != null && videoType == VideoType.VideoFile)
-                {
-                    UpdateFromMediaInfo(info, videoStream);
-                }
             }
 
             return info;
@@ -149,6 +141,7 @@ namespace MediaBrowser.MediaEncoding.Probing
             if (streamInfo.tags != null)
             {
                 stream.Language = GetDictionaryValue(streamInfo.tags, "language");
+                stream.Comment = GetDictionaryValue(streamInfo.tags, "comment");
             }
 
             if (string.Equals(streamInfo.codec_type, "audio", StringComparison.OrdinalIgnoreCase))
@@ -167,6 +160,15 @@ namespace MediaBrowser.MediaEncoding.Probing
                 }
 
                 stream.ChannelLayout = ParseChannelLayout(streamInfo.channel_layout);
+
+                if (streamInfo.bits_per_sample > 0)
+                {
+                    stream.BitDepth = streamInfo.bits_per_sample;
+                }
+                else if (streamInfo.bits_per_raw_sample > 0)
+                {
+                    stream.BitDepth = streamInfo.bits_per_raw_sample;
+                }
             }
             else if (string.Equals(streamInfo.codec_type, "subtitle", StringComparison.OrdinalIgnoreCase))
             {
@@ -185,7 +187,14 @@ namespace MediaBrowser.MediaEncoding.Probing
                 stream.AverageFrameRate = GetFrameRate(streamInfo.avg_frame_rate);
                 stream.RealFrameRate = GetFrameRate(streamInfo.r_frame_rate);
 
-                stream.BitDepth = GetBitDepth(stream.PixelFormat);
+                if (streamInfo.bits_per_sample > 0)
+                {
+                    stream.BitDepth = streamInfo.bits_per_sample;
+                }
+                else if (streamInfo.bits_per_raw_sample > 0)
+                {
+                    stream.BitDepth = streamInfo.bits_per_raw_sample;
+                }
 
                 //stream.IsAnamorphic = string.Equals(streamInfo.sample_aspect_ratio, "0:1", StringComparison.OrdinalIgnoreCase) ||
                 //    string.Equals(stream.AspectRatio, "2.35:1", StringComparison.OrdinalIgnoreCase) ||
@@ -279,34 +288,6 @@ namespace MediaBrowser.MediaEncoding.Probing
             }
 
             return stream;
-        }
-
-        private int? GetBitDepth(string pixelFormat)
-        {
-            var eightBit = new List<string>
-            {
-                "yuv420p",
-                "yuv411p",
-                "yuvj420p",
-                "uyyvyy411",
-                "nv12",
-                "nv21",
-                "rgb444le",
-                "rgb444be",
-                "bgr444le",
-                "bgr444be",
-                "yuvj411p"            
-            };
-
-            if (!string.IsNullOrEmpty(pixelFormat))
-            {
-                if (eightBit.Contains(pixelFormat, StringComparer.OrdinalIgnoreCase))
-                {
-                    return 8;
-                }
-            }
-
-            return null;
         }
 
         /// <summary>
@@ -497,12 +478,20 @@ namespace MediaBrowser.MediaEncoding.Probing
             }
 
             var composer = FFProbeHelpers.GetDictionaryValue(tags, "composer");
-
             if (!string.IsNullOrWhiteSpace(composer))
             {
                 foreach (var person in Split(composer, false))
                 {
                     audio.People.Add(new BaseItemPerson { Name = person, Type = PersonType.Composer });
+                }
+            }
+
+            var conductor = FFProbeHelpers.GetDictionaryValue(tags, "conductor");
+            if (!string.IsNullOrWhiteSpace(conductor))
+            {
+                foreach (var person in Split(conductor, false))
+                {
+                    audio.People.Add(new BaseItemPerson { Name = person, Type = PersonType.Conductor });
                 }
             }
 
@@ -512,7 +501,7 @@ namespace MediaBrowser.MediaEncoding.Probing
 
             if (!string.IsNullOrWhiteSpace(artists))
             {
-                audio.Artists = SplitArtists(artists, new[] { '/' }, false)
+                audio.Artists = SplitArtists(artists, new[] { '/', ';' }, false)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
             }
@@ -921,7 +910,7 @@ namespace MediaBrowser.MediaEncoding.Probing
             }
         }
 
-        private void ExtractTimestamp(Model.MediaInfo.MediaInfo video)
+        private void ExtractTimestamp(MediaInfo video)
         {
             if (video.VideoType == VideoType.VideoFile)
             {
@@ -969,32 +958,6 @@ namespace MediaBrowser.MediaEncoding.Probing
             }
 
             return TransportStreamTimestamp.None;
-        }
-
-        private void UpdateFromMediaInfo(MediaSourceInfo video, MediaStream videoStream)
-        {
-            if (video.Protocol == MediaProtocol.File && videoStream != null)
-            {
-                try
-                {
-                    _logger.Debug("Running MediaInfo against {0}", video.Path);
-
-                    var result = new MediaInfoLib().GetVideoInfo(video.Path);
-
-                    videoStream.IsCabac = result.IsCabac ?? videoStream.IsCabac;
-                    videoStream.IsInterlaced = result.IsInterlaced ?? videoStream.IsInterlaced;
-                    videoStream.BitDepth = result.BitDepth ?? videoStream.BitDepth;
-                    videoStream.RefFrames = result.RefFrames ?? videoStream.RefFrames;
-                }
-                catch (TypeLoadException)
-                {
-                    // This is non-essential. Don't spam the log
-                }
-                catch (Exception ex)
-                {
-                    _logger.ErrorException("Error running MediaInfo on {0}", ex, video.Path);
-                }
-            }
         }
     }
 }

@@ -71,7 +71,6 @@
             page.querySelector('.listTopPaging').innerHTML = pagingHtml;
 
             updateFilterControls(page, viewPanel);
-            var trigger = false;
 
             if (view == "List") {
 
@@ -79,7 +78,6 @@
                     items: result.Items,
                     sortBy: query.SortBy
                 });
-                trigger = true;
             }
             else if (view == "Poster") {
                 html += LibraryBrowser.getPosterViewHtml({
@@ -89,7 +87,8 @@
                     showParentTitle: true,
                     overlayText: true,
                     lazy: true,
-                    showDetailsMenu: true
+                    showDetailsMenu: true,
+                    overlayPlayButton: true
                 });
             }
             else if (view == "PosterCard") {
@@ -107,10 +106,6 @@
             var elem = page.querySelector('.itemsContainer');
             elem.innerHTML = html + pagingHtml;
             ImageLoader.lazyChildren(elem);
-
-            if (trigger) {
-                Events.trigger(elem, 'create');
-            }
 
             $('.btnNextPage', page).on('click', function () {
                 query.StartIndex += query.Limit;

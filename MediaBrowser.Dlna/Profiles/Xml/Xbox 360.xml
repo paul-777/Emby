@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<Profile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+<Profile xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Name>Xbox 360</Name>
   <Identification>
     <ModelName>Xbox 360</ModelName>
@@ -11,12 +11,13 @@
   <FriendlyName>${HostName}: 1</FriendlyName>
   <Manufacturer>Microsoft Corporation</Manufacturer>
   <ManufacturerUrl>http://www.microsoft.com</ManufacturerUrl>
-  <ModelName>Windows Media Connect</ModelName>
+  <ModelName>Windows Media Player Sharing</ModelName>
   <ModelDescription>Emby : UPnP Media Server</ModelDescription>
-  <ModelNumber>001</ModelNumber>
+  <ModelNumber>12.0</ModelNumber>
   <ModelUrl>http://go.microsoft.com/fwlink/?LinkId=105926</ModelUrl>
   <EnableAlbumArtInDidl>false</EnableAlbumArtInDidl>
   <EnableSingleAlbumArtLimit>false</EnableSingleAlbumArtLimit>
+  <EnableSingleSubtitleLimit>false</EnableSingleSubtitleLimit>
   <SupportedMediaTypes>Audio,Photo,Video</SupportedMediaTypes>
   <AlbumArtPn>JPEG_SM</AlbumArtPn>
   <MaxAlbumArtWidth>480</MaxAlbumArtWidth>
@@ -34,7 +35,6 @@
   <RequiresPlainFolders>true</RequiresPlainFolders>
   <EnableMSMediaReceiverRegistrar>true</EnableMSMediaReceiverRegistrar>
   <IgnoreTranscodeByteRangeRequests>false</IgnoreTranscodeByteRangeRequests>
-  <EnableDlnaProtocol>false</EnableDlnaProtocol>
   <XmlRootAttributes />
   <DirectPlayProfiles>
     <DirectPlayProfile container="avi" audioCodec="ac3,mp3" videoCodec="mpeg4" type="Video" />

@@ -57,6 +57,11 @@ namespace MediaBrowser.WebDashboard.Api
         public string Mode { get; set; }
     }
 
+    [Route("/robots.txt", "GET")]
+    public class GetRobotsTxt
+    {
+    }
+
     /// <summary>
     /// Class GetDashboardResource
     /// </summary>
@@ -188,6 +193,14 @@ namespace MediaBrowser.WebDashboard.Api
             return ResultFactory.GetOptimizedResult(Request, configPages);
         }
 
+        public object Get(GetRobotsTxt request)
+        {
+            return Get(new GetDashboardResource
+            {
+                ResourceName = "robots.txt"
+            });
+        }
+
         /// <summary>
         /// Gets the specified request.
         /// </summary>
@@ -311,6 +324,7 @@ namespace MediaBrowser.WebDashboard.Api
             DeleteFilesByExtension(bowerPath, ".json");
             DeleteFilesByExtension(bowerPath, ".gz");
             DeleteFilesByExtension(bowerPath, ".bat");
+            DeleteFilesByExtension(bowerPath, ".sh");
             DeleteFilesByName(bowerPath, "copying", true);
             DeleteFilesByName(bowerPath, "license", true);
             DeleteFilesByName(bowerPath, "license-mit", true);
@@ -331,15 +345,22 @@ namespace MediaBrowser.WebDashboard.Api
             DeleteFoldersByName(bowerPath, "grunt");
             DeleteFoldersByName(bowerPath, "rollups");
 
+            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "jquery", "external"), true);
+            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "jquery", "src"), true);
+          
             DeleteCryptoFiles(Path.Combine(bowerPath, "cryptojslib", "components"));
 
             DeleteFoldersByName(Path.Combine(bowerPath, "jquery"), "src");
             DeleteFoldersByName(Path.Combine(bowerPath, "jstree"), "src");
             DeleteFoldersByName(Path.Combine(bowerPath, "Sortable"), "meteor");
             DeleteFoldersByName(Path.Combine(bowerPath, "Sortable"), "st");
-            DeleteFoldersByName(Path.Combine(bowerPath, "swipebox"), "lib");
-            DeleteFoldersByName(Path.Combine(bowerPath, "swipebox"), "scss");
+            DeleteFoldersByName(Path.Combine(bowerPath, "Swiper"), "src");
 
+            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "marked"), true);
+            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "marked-element"), true);
+            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "prism"), true);
+            _fileSystem.DeleteDirectory(Path.Combine(bowerPath, "prism-element"), true);
+           
             if (string.Equals(mode, "cordova", StringComparison.OrdinalIgnoreCase))
             {
                 // Delete things that are unneeded in an attempt to keep the output as trim as possible

@@ -52,7 +52,6 @@
             var view = getPageData().view;
 
             var html = '';
-            var trigger = false;
             var pagingHtml = LibraryBrowser.getQueryPagingHtml({
                 startIndex: query.StartIndex,
                 limit: query.Limit,
@@ -79,7 +78,8 @@
                     shape: "backdrop",
                     preferThumb: true,
                     context: 'tv',
-                    lazy: true
+                    lazy: true,
+                    overlayPlayButton: true
                 });
 
             }
@@ -113,7 +113,6 @@
                     context: 'tv',
                     sortBy: query.SortBy
                 });
-                trigger = true;
             }
             else if (view == "PosterCard") {
                 html = LibraryBrowser.getPosterViewHtml({
@@ -134,17 +133,14 @@
                     shape: "portrait",
                     context: 'tv',
                     centerText: true,
-                    lazy: true
+                    lazy: true,
+                    overlayPlayButton: true
                 });
             }
 
             var elem = page.querySelector('#items');
             elem.innerHTML = html + pagingHtml;
             ImageLoader.lazyChildren(elem);
-
-            if (trigger) {
-                Events.trigger(elem, 'create');
-            }
 
             $('.btnNextPage', page).on('click', function () {
                 query.StartIndex += query.Limit;

@@ -1,4 +1,4 @@
-﻿(function () {
+﻿define(['browser'], function (browser) {
 
     require(['css!devices/ie/ie.css']);
     var browserSwitchKey = "ieswitchbrowser";
@@ -6,12 +6,10 @@
     function getWeek(date) {
 
         var onejan = new Date(date.getFullYear(), 0, 1);
-        return Math.ceil((((date - onejan) / 86400000) + onejan.getDay() + 1) / 7);
+        return Math.ceil((((date - onejan) / 86400000) + onejan.getDay() + 1) / 4);
     }
 
     function onPageShow() {
-
-        var page = this;
 
         var expectedValue;
         var msg;
@@ -33,7 +31,7 @@
                 title: Globalize.translate('HeaderTryMicrosoftEdge')
             });
 
-        } else {
+        } else if (!browser.mobile) {
 
             expectedValue = getWeek(new Date()) + "_7";
 
@@ -62,5 +60,4 @@
 
     pageClassOn('pageshow', "libraryPage", onPageShow);
     pageClassOn('pageshow', "type-interior", onPageShow);
-
-})();
+});

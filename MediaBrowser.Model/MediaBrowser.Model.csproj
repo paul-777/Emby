@@ -137,6 +137,7 @@
     <Compile Include="Dto\MetadataEditorInfo.cs" />
     <Compile Include="Dto\NameIdPair.cs" />
     <Compile Include="Dto\NameValuePair.cs" />
+    <Compile Include="FileOrganization\SmartMatchInfo.cs" />
     <Compile Include="MediaInfo\LiveStreamRequest.cs" />
     <Compile Include="MediaInfo\LiveStreamResponse.cs" />
     <Compile Include="MediaInfo\PlaybackInfoRequest.cs" />
@@ -144,7 +145,6 @@
     <Compile Include="Dto\MediaSourceType.cs" />
     <Compile Include="Configuration\DynamicDayOfWeek.cs" />
     <Compile Include="Entities\ExtraType.cs" />
-    <Compile Include="Entities\SupporterInfo.cs" />
     <Compile Include="Entities\TrailerType.cs" />
     <Compile Include="Extensions\BoolHelper.cs" />
     <Compile Include="Extensions\FloatHelper.cs" />
@@ -163,6 +163,7 @@
     <Compile Include="MediaInfo\MediaProtocol.cs" />
     <Compile Include="MediaInfo\SubtitleTrackEvent.cs" />
     <Compile Include="MediaInfo\SubtitleTrackInfo.cs" />
+    <Compile Include="Net\EndPointInfo.cs" />
     <Compile Include="Net\HttpResponse.cs" />
     <Compile Include="Net\MimeTypes.cs" />
     <Compile Include="Notifications\NotificationOption.cs" />

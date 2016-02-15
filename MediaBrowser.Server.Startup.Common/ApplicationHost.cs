@@ -91,14 +91,17 @@ using MediaBrowser.Server.Startup.Common.Migrations;
 using MediaBrowser.WebDashboard.Api;
 using MediaBrowser.XbmcMetadata.Providers;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
+using MediaBrowser.Common.Implementations.Updates;
 
 namespace MediaBrowser.Server.Startup.Common
 {
@@ -204,7 +207,7 @@ namespace MediaBrowser.Server.Startup.Common
         private IPlaylistManager PlaylistManager { get; set; }
 
         private readonly StartupOptions _startupOptions;
-        private readonly string _remotePackageName;
+        private readonly string _releaseAssetFilename;
 
         internal INativeApp NativeApp { get; set; }
 
@@ -215,18 +218,18 @@ namespace MediaBrowser.Server.Startup.Common
         /// <param name="logManager">The log manager.</param>
         /// <param name="options">The options.</param>
         /// <param name="fileSystem">The file system.</param>
-        /// <param name="remotePackageName">Name of the remote package.</param>
+        /// <param name="releaseAssetFilename">The release asset filename.</param>
         /// <param name="nativeApp">The native application.</param>
         public ApplicationHost(ServerApplicationPaths applicationPaths,
             ILogManager logManager,
             StartupOptions options,
             IFileSystem fileSystem,
-            string remotePackageName,
+            string releaseAssetFilename,
             INativeApp nativeApp)
             : base(applicationPaths, logManager, fileSystem)
         {
             _startupOptions = options;
-            _remotePackageName = remotePackageName;
+            _releaseAssetFilename = releaseAssetFilename;
             NativeApp = nativeApp;
 
             SetBaseExceptionMessage();
@@ -314,10 +317,19 @@ namespace MediaBrowser.Server.Startup.Common
         /// <returns>Task.</returns>
         public override async Task RunStartupTasks()
         {
+            if (ServerConfigurationManager.Configuration.MigrationVersion < CleanDatabaseScheduledTask.MigrationVersion &&
+                ServerConfigurationManager.Configuration.IsStartupWizardCompleted)
+            {
+                TaskManager.SuspendTriggers = true;
+            }
+            
             await base.RunStartupTasks().ConfigureAwait(false);
 
+            Logger.Info("ServerId: {0}", SystemId);
             Logger.Info("Core startup complete");
             HttpServer.GlobalResponse = null;
+
+            PerformPostInitMigrations();
 
             Parallel.ForEach(GetExports<IServerEntryPoint>(), entryPoint =>
             {
@@ -332,8 +344,6 @@ namespace MediaBrowser.Server.Startup.Common
             });
 
             LogManager.RemoveConsoleOutput();
-
-            PerformPostInitMigrations();
         }
 
         public override Task Init(IProgress<double> progress)
@@ -363,7 +373,8 @@ namespace MediaBrowser.Server.Startup.Common
         {
             var migrations = new List<IVersionMigration>
             {
-                new Release5767(ServerConfigurationManager, TaskManager)
+                new OmdbEpisodeProviderMigration(ServerConfigurationManager),
+                new DbMigration(ServerConfigurationManager, TaskManager)
             };
 
             foreach (var task in migrations)
@@ -419,7 +430,7 @@ namespace MediaBrowser.Server.Startup.Common
             UserManager = new UserManager(LogManager.GetLogger("UserManager"), ServerConfigurationManager, UserRepository, XmlSerializer, NetworkManager, () => ImageProcessor, () => DtoService, () => ConnectManager, this, JsonSerializer, FileSystemManager);
             RegisterSingleInstance(UserManager);
 
-            LibraryManager = new LibraryManager(Logger, TaskManager, UserManager, ServerConfigurationManager, UserDataManager, () => LibraryMonitor, FileSystemManager, () => ProviderManager);
+            LibraryManager = new LibraryManager(Logger, TaskManager, UserManager, ServerConfigurationManager, UserDataManager, () => LibraryMonitor, FileSystemManager, () => ProviderManager, () => UserViewManager);
             RegisterSingleInstance(LibraryManager);
 
             var musicManager = new MusicManager(LibraryManager);
@@ -436,7 +447,7 @@ namespace MediaBrowser.Server.Startup.Common
 
             RegisterSingleInstance<ISearchEngine>(() => new SearchEngine(LogManager, LibraryManager, UserManager));
 
-            HttpServer = ServerFactory.CreateServer(this, LogManager, ServerConfigurationManager, "Emby", "web/index.html");
+            HttpServer = ServerFactory.CreateServer(this, LogManager, ServerConfigurationManager, NetworkManager, "Emby", "web/index.html");
             HttpServer.GlobalResponse = LocalizationManager.GetLocalizedString("StartupEmbyServerIsLoading");
             RegisterSingleInstance(HttpServer, false);
             progress.Report(10);
@@ -465,7 +476,7 @@ namespace MediaBrowser.Server.Startup.Common
             ConnectManager = new ConnectManager(LogManager.GetLogger("Connect"), ApplicationPaths, JsonSerializer, encryptionManager, HttpClient, this, ServerConfigurationManager, UserManager, ProviderManager, SecurityManager, FileSystemManager);
             RegisterSingleInstance(ConnectManager);
 
-            DeviceManager = new DeviceManager(new DeviceRepository(ApplicationPaths, JsonSerializer, LogManager.GetLogger("DeviceManager"), FileSystemManager), UserManager, FileSystemManager, LibraryMonitor, ConfigurationManager, LogManager.GetLogger("DeviceManager"), NetworkManager);
+            DeviceManager = new DeviceManager(new DeviceRepository(ApplicationPaths, JsonSerializer, LogManager.GetLogger("DeviceManager"), FileSystemManager), UserManager, FileSystemManager, LibraryMonitor, ServerConfigurationManager, LogManager.GetLogger("DeviceManager"), NetworkManager);
             RegisterSingleInstance(DeviceManager);
 
             var newsService = new Implementations.News.NewsService(ApplicationPaths, JsonSerializer);
@@ -503,7 +514,7 @@ namespace MediaBrowser.Server.Startup.Common
             UserViewManager = new UserViewManager(LibraryManager, LocalizationManager, UserManager, ChannelManager, LiveTvManager, ServerConfigurationManager);
             RegisterSingleInstance(UserViewManager);
 
-            var contentDirectory = new ContentDirectory(dlnaManager, UserDataManager, ImageProcessor, LibraryManager, ServerConfigurationManager, UserManager, LogManager.GetLogger("UpnpContentDirectory"), HttpClient, LocalizationManager, ChannelManager, MediaSourceManager);
+            var contentDirectory = new ContentDirectory(dlnaManager, UserDataManager, ImageProcessor, LibraryManager, ServerConfigurationManager, UserManager, LogManager.GetLogger("UpnpContentDirectory"), HttpClient, LocalizationManager, ChannelManager, MediaSourceManager, UserViewManager);
             RegisterSingleInstance<IContentDirectory>(contentDirectory);
 
             var mediaRegistrar = new MediaReceiverRegistrar(LogManager.GetLogger("MediaReceiverRegistrar"), HttpClient, ServerConfigurationManager);
@@ -515,7 +526,7 @@ namespace MediaBrowser.Server.Startup.Common
             SubtitleManager = new SubtitleManager(LogManager.GetLogger("SubtitleManager"), FileSystemManager, LibraryMonitor, LibraryManager, MediaSourceManager);
             RegisterSingleInstance(SubtitleManager);
 
-            RegisterSingleInstance<IDeviceDiscovery>(new DeviceDiscovery(LogManager.GetLogger("IDeviceDiscovery"), ServerConfigurationManager, this));
+            RegisterSingleInstance<IDeviceDiscovery>(new DeviceDiscovery(LogManager.GetLogger("IDeviceDiscovery"), ServerConfigurationManager, this, NetworkManager));
 
             ChapterManager = new ChapterManager(LibraryManager, LogManager.GetLogger("ChapterManager"), ServerConfigurationManager, ItemRepository);
             RegisterSingleInstance(ChapterManager);
@@ -525,6 +536,8 @@ namespace MediaBrowser.Server.Startup.Common
 
             EncodingManager = new EncodingManager(FileSystemManager, Logger, MediaEncoder, ChapterManager);
             RegisterSingleInstance(EncodingManager);
+
+            RegisterSingleInstance(NativeApp.GetPowerManagement());
 
             var sharingRepo = new SharingRepository(LogManager, ApplicationPaths);
             await sharingRepo.Initialize().ConfigureAwait(false);
@@ -640,11 +653,19 @@ namespace MediaBrowser.Server.Startup.Common
         /// <returns>Task{IUserRepository}.</returns>
         private async Task<IUserRepository> GetUserRepository()
         {
-            var repo = new SqliteUserRepository(LogManager, ApplicationPaths, JsonSerializer);
+            try
+            {
+                var repo = new SqliteUserRepository(LogManager, ApplicationPaths, JsonSerializer);
 
-            await repo.Initialize().ConfigureAwait(false);
+                await repo.Initialize().ConfigureAwait(false);
 
-            return repo;
+                return repo;
+            }
+            catch (Exception ex)
+            {
+                Logger.ErrorException("Error opening user db", ex);
+                throw;
+            }
         }
 
         /// <summary>
@@ -662,7 +683,7 @@ namespace MediaBrowser.Server.Startup.Common
 
         private async Task<IAuthenticationRepository> GetAuthenticationRepository()
         {
-            var repo = new AuthenticationRepository(LogManager.GetLogger("AuthenticationRepository"), ServerConfigurationManager.ApplicationPaths);
+            var repo = new AuthenticationRepository(LogManager, ServerConfigurationManager.ApplicationPaths);
 
             await repo.Initialize().ConfigureAwait(false);
 
@@ -671,7 +692,7 @@ namespace MediaBrowser.Server.Startup.Common
 
         private async Task<IActivityRepository> GetActivityLogRepository()
         {
-            var repo = new ActivityRepository(LogManager.GetLogger("ActivityRepository"), ServerConfigurationManager.ApplicationPaths);
+            var repo = new ActivityRepository(LogManager, ServerConfigurationManager.ApplicationPaths);
 
             await repo.Initialize().ConfigureAwait(false);
 
@@ -1108,14 +1129,14 @@ namespace MediaBrowser.Server.Startup.Common
                 try
                 {
                     // Return the first matched address, if found, or the first known local address
-                    var address = LocalIpAddress;
+                    var address = LocalIpAddresses.FirstOrDefault(i => !IPAddress.IsLoopback(i));
 
-                    if (!string.IsNullOrWhiteSpace(address))
+                    if (address != null)
                     {
-                        address = GetLocalApiUrl(address);
+                        return GetLocalApiUrl(address.ToString());
                     }
 
-                    return address;
+                    return null;
                 }
                 catch (Exception ex)
                 {
@@ -1133,37 +1154,75 @@ namespace MediaBrowser.Server.Startup.Common
                 HttpPort.ToString(CultureInfo.InvariantCulture));
         }
 
-        public string LocalIpAddress
-        {
-            get
-            {
-                return HttpServerIpAddresses.FirstOrDefault();
-            }
-        }
-
-        private IEnumerable<string> HttpServerIpAddresses
+        public List<IPAddress> LocalIpAddresses
         {
             get
             {
                 var localAddresses = NetworkManager.GetLocalIpAddresses()
+                    .Where(IsIpAddressValid)
                     .ToList();
 
-                var httpServerAddresses = HttpServer.LocalEndPoints
-                    .Select(i => i.Split(':').FirstOrDefault())
-                    .Where(i => !string.IsNullOrEmpty(i))
-                    .ToList();
+                return localAddresses;
+            }
+        }
 
-                // Cross-check the local ip addresses with addresses that have been received on with the http server
-                var matchedAddresses = httpServerAddresses
-                    .Where(i => localAddresses.Contains(i, StringComparer.OrdinalIgnoreCase))
-                    .ToList();
+        private readonly ConcurrentDictionary<string, bool> _validAddressResults = new ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        private DateTime _lastAddressCacheClear;
+        private bool IsIpAddressValid(IPAddress address)
+        {
+            return IsIpAddressValidInternal(address).Result;
+        }
+        private async Task<bool> IsIpAddressValidInternal(IPAddress address)
+        {
+            if (IPAddress.IsLoopback(address))
+            {
+                return true;
+            }
 
-                if (matchedAddresses.Count == 0)
+            var apiUrl = GetLocalApiUrl(address.ToString());
+            apiUrl += "/system/ping";
+
+            if ((DateTime.UtcNow - _lastAddressCacheClear).TotalMinutes >= 5)
+            {
+                _lastAddressCacheClear = DateTime.UtcNow;
+                _validAddressResults.Clear();
+            }
+
+            bool cachedResult;
+            if (_validAddressResults.TryGetValue(apiUrl, out cachedResult))
+            {
+                return cachedResult;
+            }
+
+            try
+            {
+                using (var response = await HttpClient.SendAsync(new HttpRequestOptions
                 {
-                    return localAddresses;
-                }
+                    Url = apiUrl,
+                    LogErrorResponseBody = false,
+                    LogErrors = false,
+                    LogRequest = false,
+                    TimeoutMs = 30000
 
-                return matchedAddresses;
+                }, "POST").ConfigureAwait(false))
+                {
+                    using (var reader = new StreamReader(response.Content))
+                    {
+                        var result = reader.ReadToEnd();
+                        var valid = string.Equals(Name, result, StringComparison.OrdinalIgnoreCase);
+
+                        _validAddressResults.AddOrUpdate(apiUrl, valid, (k, v) => valid);
+                        //Logger.Debug("Ping test result to {0}. Success: {1}", apiUrl, valid);
+                        return valid;
+                    }
+                }
+            }
+            catch
+            {
+                //Logger.Debug("Ping test result to {0}. Success: {1}", apiUrl, false);
+
+                _validAddressResults.AddOrUpdate(apiUrl, false, (k, v) => false);
+                return false;
             }
         }
 
@@ -1263,24 +1322,22 @@ namespace MediaBrowser.Server.Startup.Common
         /// <returns>Task{CheckForUpdateResult}.</returns>
         public override async Task<CheckForUpdateResult> CheckForApplicationUpdate(CancellationToken cancellationToken, IProgress<double> progress)
         {
-            var availablePackages = await InstallationManager.GetAvailablePackagesWithoutRegistrationInfo(cancellationToken).ConfigureAwait(false);
+            var cacheLength = TimeSpan.FromHours(3);
+            var updateLevel = ConfigurationManager.CommonConfiguration.SystemUpdateLevel;
 
-            var version = InstallationManager.GetLatestCompatibleVersion(availablePackages, _remotePackageName, null, ApplicationVersion, ConfigurationManager.CommonConfiguration.SystemUpdateLevel);
+            if (updateLevel == PackageVersionClass.Beta)
+            {
+                cacheLength = TimeSpan.FromHours(1);
+            }
+            else if (updateLevel == PackageVersionClass.Dev)
+            {
+                cacheLength = TimeSpan.FromMinutes(5);
+            }
 
-            var versionObject = version == null || string.IsNullOrWhiteSpace(version.versionStr) ? null : new Version(version.versionStr);
-
-            var isUpdateAvailable = versionObject != null && versionObject > ApplicationVersion;
-
-            var result = versionObject != null ?
-                new CheckForUpdateResult { AvailableVersion = versionObject.ToString(), IsUpdateAvailable = isUpdateAvailable, Package = version } :
-                new CheckForUpdateResult { AvailableVersion = ApplicationVersion.ToString(), IsUpdateAvailable = false };
+            var result = await new GithubUpdater(HttpClient, JsonSerializer, cacheLength).CheckForUpdateResult("MediaBrowser", "Emby", ApplicationVersion, updateLevel, _releaseAssetFilename,
+                    "MBServer", "Mbserver.zip", cancellationToken).ConfigureAwait(false);
 
             HasUpdateAvailable = result.IsUpdateAvailable;
-
-            if (result.IsUpdateAvailable)
-            {
-                Logger.Info("New application version is available: {0}", result.AvailableVersion);
-            }
 
             return result;
         }
@@ -1294,7 +1351,7 @@ namespace MediaBrowser.Server.Startup.Common
         /// <returns>Task.</returns>
         public override async Task UpdateApplication(PackageVersionInfo package, CancellationToken cancellationToken, IProgress<double> progress)
         {
-            await InstallationManager.InstallPackage(package, progress, cancellationToken).ConfigureAwait(false);
+            await InstallationManager.InstallPackage(package, false, progress, cancellationToken).ConfigureAwait(false);
 
             HasUpdateAvailable = false;
 

@@ -12,9 +12,10 @@
 
         $('#selectUser', page).html(html).val(config.UserId || '');
         $('#selectReleaseDateFormat', page).val(config.ReleaseDateFormat);
-        $('#chkSaveImagePaths', page).checked(config.SaveImagePathsInNfo).checkboxradio('refresh');
-        $('#chkEnablePathSubstitution', page).checked(config.EnablePathSubstitution).checkboxradio('refresh');
-        $('#chkEnableExtraThumbs', page).checked(config.EnableExtraThumbsDuplication).checkboxradio('refresh');
+
+        page.querySelector('#chkSaveImagePaths').checked = config.SaveImagePathsInNfo;
+        page.querySelector('#chkEnablePathSubstitution').checked = config.EnablePathSubstitution;
+        page.querySelector('#chkEnableExtraThumbs').checked = config.EnableExtraThumbsDuplication;
 
         Dashboard.hideLoadingMsg();
     }
@@ -28,9 +29,10 @@
 
             config.UserId = $('#selectUser', form).val() || null;
             config.ReleaseDateFormat = $('#selectReleaseDateFormat', form).val();
-            config.SaveImagePathsInNfo = $('#chkSaveImagePaths', form).checked();
-            config.EnablePathSubstitution = $('#chkEnablePathSubstitution', form).checked();
-            config.EnableExtraThumbsDuplication = $('#chkEnableExtraThumbs', form).checked();
+
+            config.SaveImagePathsInNfo = form.querySelector('#chkSaveImagePaths').checked;
+            config.EnablePathSubstitution = form.querySelector('#chkEnablePathSubstitution').checked;
+            config.EnableExtraThumbsDuplication = form.querySelector('#chkEnableExtraThumbs').checked;
 
             ApiClient.updateNamedConfiguration(metadataKey, config).then(Dashboard.processServerConfigurationUpdateResult);
         });
@@ -54,7 +56,7 @@
 
         Promise.all([promise1, promise2]).then(function (responses) {
 
-            loadPage(page, responses[0], responses[0]);
+            loadPage(page, responses[1], responses[0]);
         });
     });
 

@@ -1,4 +1,4 @@
-﻿define(['components/paperdialoghelper', 'paper-fab', 'paper-item-body', 'paper-icon-item'], function (paperDialogHelper) {
+﻿define(['paperdialoghelper', 'paper-fab', 'paper-item-body', 'paper-icon-item'], function (paperDialogHelper) {
 
     var currentItem;
 
@@ -297,14 +297,27 @@
         });
     }
 
-    function reload(page, itemId) {
+    function reload(context, itemId) {
 
-        $('.noSearchResults', page).hide();
+        $('.noSearchResults', context).hide();
 
         function onGetItem(item) {
             currentItem = item;
 
-            fillSubtitleList(page, item);
+            fillSubtitleList(context, item);
+            var file = item.Path || '';
+            var index = Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\'));
+            if (index > -1) {
+                file = file.substring(index + 1);
+            }
+
+            if (file) {
+                context.querySelector('.pathValue').innerHTML = file;
+                context.querySelector('.originalFile').classList.remove('hide');
+            } else {
+                context.querySelector('.pathValue').innerHTML = '';
+                context.querySelector('.originalFile').classList.add('hide');
+            }
 
             Dashboard.hideLoadingMsg();
         }
@@ -339,13 +352,21 @@
             var template = this.response;
             ApiClient.getItem(Dashboard.getCurrentUserId(), itemId).then(function (item) {
 
-                var dlg = paperDialogHelper.createDialog();
+                var dlg = paperDialogHelper.createDialog({
+                    size: 'small',
+                    removeOnClose: true
+                });
+
+                dlg.classList.add('ui-body-b');
+                dlg.classList.add('background-theme-b');
 
                 var html = '';
-                html += '<h2 class="dialogHeader">';
-                html += '<paper-fab icon="arrow-back" mini class="btnCloseDialog"></paper-fab>';
-                html += '<div style="display:inline-block;margin-left:.6em;vertical-align:middle;">' + item.Name + '</div>';
-                html += '</h2>';
+                html += '<div class="dialogHeader">';
+                html += '<paper-icon-button icon="arrow-back" class="btnCancel" tabindex="-1"></paper-icon-button>';
+                html += '<div class="dialogHeaderTitle">';
+                html += item.Name;
+                html += '</div>';
+                html += '</div>';
 
                 html += '<div class="editorContent">';
                 html += Globalize.translateDocument(template);
@@ -354,10 +375,9 @@
                 dlg.innerHTML = html;
                 document.body.appendChild(dlg);
 
-                $('.subtitleSearchForm', dlg).off('submit', onSearchSubmit).on('submit', onSearchSubmit);
+                dlg.querySelector('.pathLabel').innerHTML = Globalize.translate('MediaInfoFile');
 
-                // Has to be assigned a z-index after the call to .open() 
-                $(dlg).on('iron-overlay-closed', onDialogClosed);
+                $('.subtitleSearchForm', dlg).off('submit', onSearchSubmit).on('submit', onSearchSubmit);
 
                 paperDialogHelper.open(dlg);
 
@@ -369,7 +389,7 @@
                     fillLanguages(editorContent, languages);
                 });
 
-                $('.btnCloseDialog', dlg).on('click', function () {
+                $('.btnCancel', dlg).on('click', function () {
 
                     paperDialogHelper.close(dlg);
                 });
@@ -377,12 +397,6 @@
         }
 
         xhr.send();
-    }
-
-    function onDialogClosed() {
-
-        $(this).remove();
-        Dashboard.hideLoadingMsg();
     }
 
     return {

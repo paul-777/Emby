@@ -1,4 +1,5 @@
 {
+    "DbUpgradeMessage": "Please wait while your Emby Server database is upgraded. {0}% complete.",
     "AppDeviceValues": "App: {0}, Device: {1}",
     "UserDownloadingItemWithValues": "{0} is downloading {1}",
     "FolderTypeMixed": "Contenido mezclado",
@@ -11,7 +12,7 @@
     "FolderTypeGames": "Juegos",
     "FolderTypeBooks": "Libros",
     "FolderTypeTvShows": "TV",
-    "FolderTypeInherit": "Heredado ",
+    "FolderTypeInherit": "Heredado",
     "HeaderCastCrew": "Reparto y equipo t\u00e9cnico",
     "HeaderPeople": "People",
     "ValueSpecialEpisodeName": "Special - {0}",

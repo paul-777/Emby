@@ -179,6 +179,7 @@ namespace MediaBrowser.Api
             if (primaryImageTag != null)
             {
                 result.PrimaryImageTag = primaryImageTag;
+                result.PrimaryImageAspectRatio = _dtoService.GetPrimaryImageAspectRatio(item);
             }
 
             SetThumbImageInfo(result, item);
@@ -283,7 +284,7 @@ namespace MediaBrowser.Api
         private T GetParentWithImage<T>(BaseItem item, ImageType type)
             where T : BaseItem
         {
-            return item.Parents.OfType<T>().FirstOrDefault(i => i.HasImage(type));
+            return item.GetParents().OfType<T>().FirstOrDefault(i => i.HasImage(type));
         }
     }
 }

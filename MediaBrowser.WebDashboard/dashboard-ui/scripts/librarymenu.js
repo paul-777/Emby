@@ -50,7 +50,9 @@
 
         document.body.appendChild(viewMenuBar);
 
-        ImageLoader.lazyChildren(document.querySelector('.viewMenuBar'));
+        require(['imageLoader'], function (imageLoader) {
+            imageLoader.lazyChildren(document.querySelector('.viewMenuBar'));
+        });
 
         document.dispatchEvent(new CustomEvent("headercreated", {}));
         bindMenuEvents();
@@ -66,11 +68,14 @@
         }
     }
 
-    function addUserToHeader(user) {
+    function updateUserInHeader(user) {
 
         var header = document.querySelector('.viewMenuBar');
 
-        if (user.name) {
+        var headerUserButton = header.querySelector('.headerUserButton');
+        var hasImage;
+
+        if (user && user.name) {
             if (user.imageUrl && AppInfo.enableUserImage) {
 
                 var userButtonHeight = 26;
@@ -81,16 +86,30 @@
                     url += "&height=" + (userButtonHeight * Math.max(devicePixelRatio || 1, 2));
                 }
 
-                var headerUserButton = header.querySelector('.headerUserButton');
                 if (headerUserButton) {
                     headerUserButton.icon = null;
                     headerUserButton.src = url;
                     headerUserButton.classList.add('headerUserButtonRound');
+                    hasImage = true;
                 }
             }
         }
 
-        updateLocalUser(user.localUser);
+        if (headerUserButton && !hasImage) {
+            headerUserButton.icon = 'person';
+            headerUserButton.src = null;
+            headerUserButton.classList.remove('headerUserButtonRound');
+
+            // Looks like a bug in paper-icon-button that this doesn't get removed
+            var headerUserButtonImg = headerUserButton.querySelector('img');
+            if (headerUserButtonImg) {
+                headerUserButtonImg.parentNode.removeChild(headerUserButtonImg);
+            }
+        }
+        if (user) {
+            updateLocalUser(user.localUser);
+        }
+
         requiresUserRefresh = false;
     }
 
@@ -138,11 +157,6 @@
                 dashboardEntryHeaderButton.classList.add('hide');
             }
         }
-    }
-
-    function removeUserFromHeader() {
-        
-        updateLocalUser(null);
     }
 
     function bindMenuEvents() {
@@ -204,7 +218,7 @@
                     refreshLibraryInfoInDrawer(user, drawer);
                     refreshBottomUserInfoInDrawer(user, drawer);
 
-                    Events.trigger(document, 'libraryMenuCreated');
+                    document.dispatchEvent(new CustomEvent("libraryMenuCreated", {}));
                     updateLibraryMenu(user.localUser);
                 }
 
@@ -272,10 +286,8 @@
         if (userAtTop) {
 
             html += '<div class="drawerUserPanel">';
-            html += '<div class="drawerUserPanelInner">';
-            html += '<div class="drawerUserPanelContent">';
 
-            var imgWidth = 60;
+            var imgWidth = 40;
 
             if (hasUserImage) {
                 var url = user.imageUrl;
@@ -291,8 +303,6 @@
             html += user.name;
             html += '</div>';
 
-            html += '</div>';
-            html += '</div>';
             html += '</div>';
 
             html += '<a class="sidebarLink lnkMediaFolder" data-itemid="remote" href="index.html" onclick="return LibraryMenu.onLinkClicked(event, this);"><iron-icon icon="home" class="sidebarLinkIcon" style="color:#2196F3;"></iron-icon><span class="sidebarLinkText">' + Globalize.translate('ButtonHome') + '</span></a>';
@@ -311,7 +321,10 @@
         var userHeader = drawer.querySelector('.userheader');
 
         userHeader.innerHTML = html;
-        ImageLoader.fillImages(userHeader.getElementsByClassName('lazy'));
+
+        require(['imageLoader'], function (imageLoader) {
+            imageLoader.fillImages(userHeader.getElementsByClassName('lazy'));
+        });
     }
 
     function refreshLibraryInfoInDrawer(user, drawer) {
@@ -392,9 +405,7 @@
 
     function getUserViews(apiClient, userId) {
 
-        var deferred = $.Deferred();
-
-        apiClient.getUserViews({}, userId).then(function (result) {
+        return apiClient.getUserViews({}, userId).then(function (result) {
 
             var items = result.Items;
 
@@ -430,10 +441,8 @@
                 }
             }
 
-            deferred.resolveWith(null, [list]);
+            return list;
         });
-
-        return deferred.promise();
     }
 
     function updateLibraryMenu(user) {
@@ -537,7 +546,7 @@
     }
 
     function showUserAtTop() {
-        return Dashboard.isConnectMode() || browserInfo.mobile;
+        return AppInfo.isNativeApp;
     }
 
     var requiresLibraryMenuRefresh = false;
@@ -665,22 +674,24 @@
 
     function updateCastIcon() {
 
+        var context = document;
+
+        var btnCast = context.querySelector('.btnCast');
+
         var info = MediaController.getPlayerInfo();
 
         if (info.isLocalPlayer) {
 
-            $('.btnCast').removeClass('btnActiveCast').each(function () {
-                this.icon = 'cast';
-            });
-            $('.headerSelectedPlayer').html('');
+            btnCast.icon = 'cast';
+            btnCast.classList.remove('btnActiveCast');
+
+            context.querySelector('.headerSelectedPlayer').innerHTML = '';
 
         } else {
 
-            $('.btnCast').addClass('btnActiveCast').each(function () {
-                this.icon = 'cast-connected';
-            });
-
-            $('.headerSelectedPlayer').html((info.deviceName || info.name));
+            btnCast.icon = 'cast-connected';
+            btnCast.classList.add('btnActiveCast');
+            context.querySelector('.headerSelectedPlayer').innerHTML = info.deviceName || info.name;
         }
     }
 
@@ -779,9 +790,24 @@
         }
 
         if (requiresUserRefresh) {
-            ConnectionManager.user(window.ApiClient).then(addUserToHeader);
+            ConnectionManager.user(window.ApiClient).then(updateUserInHeader);
         }
     }
+
+    pageClassOn('pageinit', 'page', function () {
+
+        var page = this;
+
+        var isLibraryPage = page.classList.contains('libraryPage');
+
+        if (isLibraryPage) {
+
+            var navs = page.querySelectorAll('.libraryViewNav');
+            for (var i = 0, length = navs.length; i < length; i++) {
+                initHeadRoom(navs[i]);
+            }
+        }
+    });
 
     pageClassOn('pagebeforeshow', 'page', function () {
 
@@ -814,11 +840,6 @@
             document.body.classList.add('libraryDocument');
             document.body.classList.remove('dashboardDocument');
             document.body.classList.remove('hideMainDrawer');
-
-            var navs = page.querySelectorAll('.libraryViewNav');
-            for (var i = 0, length = navs.length; i < length; i++) {
-                initHeadRoom(navs[i]);
-            }
         }
         else if (page.classList.contains('type-interior')) {
 
@@ -831,21 +852,6 @@
             document.body.classList.remove('libraryDocument');
             document.body.classList.remove('dashboardDocument');
             document.body.classList.add('hideMainDrawer');
-        }
-
-        // Set drawer background color
-        var darkDrawer = false;
-        if (!Dashboard.isConnectMode() && !browserInfo.mobile) {
-            darkDrawer = true;
-        }
-
-        var drawer = document.querySelector('.mainDrawerPanel #drawer');
-        if (drawer) {
-            if (darkDrawer) {
-                drawer.classList.add('darkDrawer');
-            } else {
-                drawer.classList.remove('darkDrawer');
-            }
         }
     });
 
@@ -926,6 +932,14 @@
         initializeApiClient(window.ApiClient);
     }
 
+    function setDrawerClass() {
+
+        var drawer = document.querySelector('.mainDrawerPanel #drawer');
+        if (drawer) {
+            drawer.classList.add('darkDrawer');
+        }
+    }
+
     var mainDrawerPanel = document.querySelector('.mainDrawerPanel');
     mainDrawerPanel.addEventListener('iron-select', onMainDrawerSelect);
 
@@ -938,18 +952,21 @@
     Events.on(ConnectionManager, 'localusersignedin', function (e, user) {
         requiresLibraryMenuRefresh = true;
         requiresDrawerRefresh = true;
-        ConnectionManager.user(ConnectionManager.getApiClient(user.ServerId)).then(addUserToHeader);
+        setDrawerClass();
+        ConnectionManager.user(ConnectionManager.getApiClient(user.ServerId)).then(updateUserInHeader);
     });
 
     Events.on(ConnectionManager, 'localusersignedout', function () {
         requiresLibraryMenuRefresh = true;
         requiresDrawerRefresh = true;
-        removeUserFromHeader();
+        updateUserInHeader();
     });
 
     Events.on(MediaController, 'playerchange', function () {
         updateCastIcon();
     });
+
+    setDrawerClass();
 
 })(window, document, jQuery, window.devicePixelRatio);
 

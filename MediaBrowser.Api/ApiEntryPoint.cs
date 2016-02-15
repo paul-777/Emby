@@ -294,7 +294,7 @@ namespace MediaBrowser.Api
         public void OnTranscodeEndRequest(TranscodingJob job)
         {
             job.ActiveRequestCount--;
-            Logger.Debug("OnTranscodeEndRequest job.ActiveRequestCount={0}", job.ActiveRequestCount);
+            //Logger.Debug("OnTranscodeEndRequest job.ActiveRequestCount={0}", job.ActiveRequestCount);
             if (job.ActiveRequestCount <= 0)
             {
                 PingTimer(job, false);
@@ -307,7 +307,7 @@ namespace MediaBrowser.Api
                 throw new ArgumentNullException("playSessionId");
             }
 
-            Logger.Debug("PingTranscodingJob PlaySessionId={0}", playSessionId);
+            //Logger.Debug("PingTranscodingJob PlaySessionId={0}", playSessionId);
 
             var jobs = new List<TranscodingJob>();
 
@@ -540,13 +540,13 @@ namespace MediaBrowser.Api
             }
             catch (IOException ex)
             {
-                Logger.ErrorException("Error deleting partial stream file(s) {0}", ex, path);
+                //Logger.ErrorException("Error deleting partial stream file(s) {0}", ex, path);
 
                 DeletePartialStreamFiles(path, jobType, retryCount + 1, 500);
             }
             catch (Exception ex)
             {
-                Logger.ErrorException("Error deleting partial stream file(s) {0}", ex, path);
+                //Logger.ErrorException("Error deleting partial stream file(s) {0}", ex, path);
             }
         }
 
@@ -578,7 +578,7 @@ namespace MediaBrowser.Api
             {
                 try
                 {
-                    Logger.Debug("Deleting HLS file {0}", file);
+                    //Logger.Debug("Deleting HLS file {0}", file);
                     _fileSystem.DeleteFile(file);
                 }
                 catch (DirectoryNotFoundException)
@@ -592,7 +592,7 @@ namespace MediaBrowser.Api
                 catch (IOException ex)
                 {
                     e = ex;
-                    Logger.ErrorException("Error deleting HLS file {0}", ex, file);
+                    //Logger.ErrorException("Error deleting HLS file {0}", ex, file);
                 }
             }
 

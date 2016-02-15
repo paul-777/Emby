@@ -181,11 +181,13 @@
 
     function onPlayItemButtonClick() {
 
-        var id = this.getAttribute('data-itemid');
-        var type = this.getAttribute('data-itemtype');
-        var isFolder = this.getAttribute('data-isfolder') == 'true';
-        var mediaType = this.getAttribute('data-mediatype');
-        var resumePosition = parseInt(this.getAttribute('data-resumeposition'));
+        var target = this;
+
+        var id = target.getAttribute('data-itemid');
+        var type = target.getAttribute('data-itemtype');
+        var isFolder = target.getAttribute('data-isfolder') == 'true';
+        var mediaType = target.getAttribute('data-mediatype');
+        var resumePosition = parseInt(target.getAttribute('data-resumeposition'));
 
         LibraryBrowser.showPlayMenu(this, id, type, isFolder, mediaType, resumePosition);
 
@@ -260,6 +262,16 @@
                 });
             }
 
+            if (user.Policy.EnableContentDownloading && AppInfo.supportsDownloading) {
+                if (mediaType) {
+                    items.push({
+                        name: Globalize.translate('ButtonDownload'),
+                        id: 'download',
+                        ironIcon: 'file-download'
+                    });
+                }
+            }
+
             if (commands.indexOf('delete') != -1) {
                 items.push({
                     name: Globalize.translate('ButtonDelete'),
@@ -268,28 +280,30 @@
                 });
             }
 
-            if (user.Policy.IsAdministrator && commands.indexOf('edit') != -1) {
-                items.push({
-                    name: Globalize.translate('ButtonEdit'),
-                    id: 'edit',
-                    ironIcon: 'mode-edit'
-                });
-            }
+            if (user.Policy.IsAdministrator) {
+                if (commands.indexOf('edit') != -1) {
+                    items.push({
+                        name: Globalize.translate('ButtonEdit'),
+                        id: 'edit',
+                        ironIcon: 'mode-edit'
+                    });
+                }
 
-            if (commands.indexOf('editimages') != -1) {
-                items.push({
-                    name: Globalize.translate('ButtonEditImages'),
-                    id: 'editimages',
-                    ironIcon: 'photo'
-                });
-            }
+                if (commands.indexOf('editimages') != -1) {
+                    items.push({
+                        name: Globalize.translate('ButtonEditImages'),
+                        id: 'editimages',
+                        ironIcon: 'photo'
+                    });
+                }
 
-            if (commands.indexOf('editsubtitles') != -1) {
-                items.push({
-                    name: Globalize.translate('ButtonEditSubtitles'),
-                    id: 'editsubtitles',
-                    ironIcon: 'closed-caption'
-                });
+                if (commands.indexOf('editsubtitles') != -1) {
+                    items.push({
+                        name: Globalize.translate('ButtonEditSubtitles'),
+                        id: 'editsubtitles',
+                        ironIcon: 'closed-caption'
+                    });
+                }
             }
 
             if (commands.indexOf('instantmix') != -1) {
@@ -438,9 +452,9 @@
                 }
             }
 
-            require(['actionsheet'], function () {
+            require(['actionsheet'], function (actionsheet) {
 
-                ActionSheetElement.show({
+                actionsheet.show({
                     items: items,
                     positionTo: displayContextItem,
                     callback: function (id) {
@@ -457,7 +471,7 @@
                                 PlaylistManager.showPanel([itemId]);
                                 break;
                             case 'delete':
-                                LibraryBrowser.deleteItem(itemId);
+                                LibraryBrowser.deleteItems([itemId]);
                                 break;
                             case 'download':
                                 {
@@ -494,7 +508,9 @@
                                 Dashboard.navigate('itemdetails.html?id=' + albumid);
                                 break;
                             case 'record':
-                                Dashboard.navigate('livetvnewrecording.html?programid=' + itemId);
+                                require(['components/recordingcreator/recordingcreator'], function (recordingcreator) {
+                                    recordingcreator.show(itemId);
+                                });
                                 break;
                             case 'artist':
                                 Dashboard.navigate('itemdetails.html?context=music&id=' + artistid);
@@ -620,8 +636,8 @@
             return false;
         }
 
-        var overlayTarget = parentWithClass(e.target, 'cardOverlayTarget');
-        if (overlayTarget) {
+        var button = parentWithClass(e.target, 'btnUserItemRating');
+        if (button) {
             e.stopPropagation();
             e.preventDefault();
             return false;
@@ -774,7 +790,7 @@
             showOverlayTimeout = setTimeout(function () {
                 onShowTimerExpired(elem);
 
-            }, 1000);
+            }, 1200);
         }
 
         function preventTouchHover() {
@@ -838,11 +854,19 @@
 
         require(['hammer'], function (Hammer) {
 
-            var hammertime = new Hammer(element);
+            var manager = new Hammer.Manager(element);
+
+            var press = new Hammer.Press({
+                time: 500
+            });
+
+            manager.add(press);
+
+            //var hammertime = new Hammer(element);
             element.classList.add('hasTapHold');
 
-            hammertime.on('press', onTapHold);
-            hammertime.on('pressup', onTapHoldUp);
+            manager.on('press', onTapHold);
+            manager.on('pressup', onTapHoldUp);
         });
 
         showTapHoldHelp(element);
@@ -888,11 +912,10 @@
 
             showSelections(card);
 
-            if (s.stopPropagation) {
+            if (e.stopPropagation) {
                 e.stopPropagation();
             }
             e.preventDefault();
-            e.stopPropagation();
             return false;
         }
         e.preventDefault();
@@ -945,19 +968,17 @@
 
         if (!itemSelectionPanel) {
 
-            require(['paper-checkbox'], function () {
-                itemSelectionPanel = document.createElement('div');
-                itemSelectionPanel.classList.add('itemSelectionPanel');
+            itemSelectionPanel = document.createElement('div');
+            itemSelectionPanel.classList.add('itemSelectionPanel');
 
-                item.querySelector('.cardContent').appendChild(itemSelectionPanel);
+            item.querySelector('.cardContent').appendChild(itemSelectionPanel);
 
-                var chkItemSelect = document.createElement('paper-checkbox');
-                chkItemSelect.classList.add('chkItemSelect');
+            var chkItemSelect = document.createElement('paper-checkbox');
+            chkItemSelect.classList.add('chkItemSelect');
 
-                $(chkItemSelect).on('change', onSelectionChange);
+            $(chkItemSelect).on('change', onSelectionChange);
 
-                itemSelectionPanel.appendChild(chkItemSelect);
-            });
+            itemSelectionPanel.appendChild(chkItemSelect);
         }
     }
 
@@ -983,11 +1004,11 @@
 
             selectionCommandsPanel.innerHTML = html;
 
-            $('.btnCloseSelectionPanel', selectionCommandsPanel).on('click', hideSelections);
+            selectionCommandsPanel.querySelector('.btnCloseSelectionPanel').addEventListener('click', hideSelections);
 
             var btnSelectionPanelOptions = selectionCommandsPanel.querySelector('.btnSelectionPanelOptions');
 
-            $(btnSelectionPanelOptions).on('click', showMenuForSelectedItems);
+            btnSelectionPanelOptions.addEventListener('click', showMenuForSelectedItems);
 
             if (!browserInfo.mobile) {
                 shake(btnSelectionPanelOptions, 1);
@@ -1014,14 +1035,16 @@
 
     function showSelections(initialCard) {
 
-        var cards = document.querySelectorAll('.card');
-        for (var i = 0, length = cards.length; i < length; i++) {
-            showSelection(cards[i]);
-        }
+        require(['paper-checkbox'], function () {
+            var cards = document.querySelectorAll('.card');
+            for (var i = 0, length = cards.length; i < length; i++) {
+                showSelection(cards[i]);
+            }
 
-        showSelectionCommands();
-        initialCard.querySelector('.chkItemSelect').checked = true;
-        updateItemSelection(initialCard, true);
+            showSelectionCommands();
+            initialCard.querySelector('.chkItemSelect').checked = true;
+            updateItemSelection(initialCard, true);
+        });
     }
 
     function hideSelections() {
@@ -1088,6 +1111,22 @@
                 ironIcon: 'playlist-add'
             });
 
+            if (user.Policy.EnableContentDeletion) {
+                items.push({
+                    name: Globalize.translate('ButtonDelete'),
+                    id: 'delete',
+                    ironIcon: 'delete'
+                });
+            }
+
+            if (user.Policy.EnableContentDownloading && AppInfo.supportsDownloading) {
+                //items.push({
+                //    name: Globalize.translate('ButtonDownload'),
+                //    id: 'download',
+                //    ironIcon: 'file-download'
+                //});
+            }
+
             items.push({
                 name: Globalize.translate('HeaderGroupVersions'),
                 id: 'groupvideos',
@@ -1106,9 +1145,9 @@
                 ironIcon: 'sync'
             });
 
-            require(['actionsheet'], function () {
+            require(['actionsheet'], function (actionsheet) {
 
-                ActionSheetElement.show({
+                actionsheet.show({
                     items: items,
                     positionTo: e.target,
                     callback: function (id) {
@@ -1126,6 +1165,12 @@
                                 break;
                             case 'playlist':
                                 PlaylistManager.showPanel(items);
+                                hideSelections();
+                                break;
+                            case 'delete':
+                                LibraryBrowser.deleteItems(items).then(function () {
+                                    Dashboard.navigate('index.html');
+                                });
                                 hideSelections();
                                 break;
                             case 'groupvideos':
@@ -1373,7 +1418,8 @@
     }
 
     function initializeApiClient(apiClient) {
-        $(apiClient).off('websocketmessage', onWebSocketMessage).on('websocketmessage', onWebSocketMessage);
+        Events.off(apiClient, "websocketmessage", onWebSocketMessage);
+        Events.on(apiClient, "websocketmessage", onWebSocketMessage);
     }
 
     function clearRefreshTimes() {
@@ -1384,7 +1430,7 @@
         initializeApiClient(window.ApiClient);
     }
 
-    $(ConnectionManager).on('apiclientcreated', function (e, apiClient) {
+    Events.on(ConnectionManager, 'apiclientcreated', function (e, apiClient) {
         initializeApiClient(apiClient);
     });
 
