@@ -1,9 +1,9 @@
-﻿define(['paperdialoghelper', 'paper-item', 'paper-input', 'paper-fab', 'paper-item-body'], function (paperDialogHelper) {
+﻿define(['dialogHelper', 'jQuery', 'paper-item', 'paper-input', 'paper-fab', 'paper-item-body', 'paper-icon-button-light'], function (dialogHelper, $) {
 
     var systemInfo;
     function getSystemInfo() {
 
-        var deferred = DeferredBuilder.Deferred();
+        var deferred = jQuery.Deferred();
 
         if (systemInfo) {
             deferred.resolveWith(null, [systemInfo]);
@@ -137,7 +137,7 @@
         html += '<div>';
         html += '<paper-input id="txtDirectoryPickerPath" type="text" required="required" style="width:82%;display:inline-block;" label="' + Globalize.translate('LabelCurrentPath') + '"></paper-input>';
 
-        html += '<paper-icon-button icon="refresh" class="btnRefreshDirectories" title="' + Globalize.translate('ButtonRefresh') + '"></paper-icon-button>';
+        html += '<button type="button" is="paper-icon-button-light" class="btnRefreshDirectories" title="' + Globalize.translate('ButtonRefresh') + '"><iron-icon icon="refresh"></iron-icon></button>';
         html += '</div>';
 
         html += '<div class="results paperList" style="height: 180px; overflow-y: auto;"></div>';
@@ -207,7 +207,7 @@
 
             getSystemInfo().then(function (systemInfo) {
 
-                var dlg = paperDialogHelper.createDialog({
+                var dlg = dialogHelper.createDialog({
                     size: 'medium'
                 });
 
@@ -237,13 +237,13 @@
                 $(dlg).on('iron-overlay-opened', function () {
                     this.querySelector('#txtDirectoryPickerPath input').focus();
                 });
-                $(dlg).on('iron-overlay-closed', onDialogClosed);
+                $(dlg).on('close', onDialogClosed);
 
-                paperDialogHelper.open(dlg);
+                dialogHelper.open(dlg);
 
                 $('.btnCloseDialog', dlg).on('click', function () {
 
-                    paperDialogHelper.close(dlg);
+                    dialogHelper.close(dlg);
                 });
 
                 currentDialog = dlg;
@@ -261,7 +261,7 @@
 
         self.close = function () {
             if (currentDialog) {
-                paperDialogHelper.close(currentDialog);
+                dialogHelper.close(currentDialog);
             }
         };
 

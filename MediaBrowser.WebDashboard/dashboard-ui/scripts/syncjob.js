@@ -1,11 +1,11 @@
-﻿(function () {
+﻿define(['jQuery', 'datetime', 'paper-progress', 'paper-fab', 'paper-item-body', 'paper-icon-item', 'paper-icon-button-light', 'paper-button'], function ($, datetime) {
 
     function renderJob(page, job, dialogOptions) {
 
         var html = '';
 
         html += '<div>';
-        html += Globalize.translate('ValueDateCreated', parseISO8601Date(job.DateCreated, { toLocal: true }).toLocaleString());
+        html += Globalize.translate('ValueDateCreated', datetime.parseISO8601Date(job.DateCreated, true).toLocaleString());
         html += '</div>';
         html += '<br/>';
         html += '<div class="formFields"></div>';
@@ -17,14 +17,17 @@
         html += '</button>';
 
         $('.syncJobForm', page).html(html);
-        SyncManager.renderForm({
-            elem: $('.formFields', page),
-            dialogOptions: dialogOptions,
-            dialogOptionsFn: getTargetDialogOptionsFn(dialogOptions),
-            showName: true,
-            readOnlySyncTarget: true
-        }).then(function () {
-            fillJobValues(page, job, dialogOptions);
+
+        require(['syncDialog'], function (syncDialog) {
+            syncDialog.renderForm({
+                elem: $('.formFields', page),
+                dialogOptions: dialogOptions,
+                dialogOptionsFn: getTargetDialogOptionsFn(dialogOptions),
+                showName: true,
+                readOnlySyncTarget: true
+            }).then(function () {
+                fillJobValues(page, job, dialogOptions);
+            });
         });
     }
 
@@ -92,9 +95,9 @@
 
         if (hasActions) {
 
-            html += '<paper-icon-button icon="' + AppInfo.moreIcon + '" class="btnJobItemMenu"></paper-icon-button>';
+            html += '<button type="button" is="paper-icon-button-light" class="btnJobItemMenu"><iron-icon icon="' + AppInfo.moreIcon + '"></iron-icon></button>';
         } else {
-            html += '<paper-icon-button icon="' + AppInfo.moreIcon + '" class="btnJobItemMenu" disabled></paper-icon-button>';
+            html += '<button type="button" is="paper-icon-button-light" class="btnJobItemMenu" disabled><iron-icon icon="' + AppInfo.moreIcon + '"></iron-icon></button>';
         }
 
         html += '</paper-icon-item>';
@@ -332,7 +335,7 @@
 
     function loadJobInfo(page, job, jobItems) {
 
-        renderJob(page, job, _jobOptions);
+        //renderJob(page, job, _jobOptions);
         renderJobItems(page, jobItems);
         Dashboard.hideLoadingMsg();
     }
@@ -344,19 +347,23 @@
 
         ApiClient.getJSON(ApiClient.getUrl('Sync/Jobs/' + id)).then(function (job) {
 
-            SyncManager.setJobValues(job, page);
+            require(['syncDialog'], function (syncDialog) {
+                syncDialog.setJobValues(job, page);
 
-            ApiClient.ajax({
+                ApiClient.ajax({
 
-                url: ApiClient.getUrl('Sync/Jobs/' + id),
-                type: 'POST',
-                data: JSON.stringify(job),
-                contentType: "application/json"
+                    url: ApiClient.getUrl('Sync/Jobs/' + id),
+                    type: 'POST',
+                    data: JSON.stringify(job),
+                    contentType: "application/json"
 
-            }).then(function () {
+                }).then(function () {
 
-                Dashboard.hideLoadingMsg();
-                Dashboard.alert(Globalize.translate('SettingsSaved'));
+                    Dashboard.hideLoadingMsg();
+                    require(['toast'], function (toast) {
+                        toast(Globalize.translate('SettingsSaved'));
+                    });
+                });
             });
         });
 
@@ -421,4 +428,4 @@
         Events.off(ApiClient, "websocketmessage", onWebSocketMessage);
     });
 
-})();
+});

@@ -19,6 +19,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Xml;
+using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.Configuration;
 
 namespace MediaBrowser.Dlna.Didl
@@ -42,8 +43,9 @@ namespace MediaBrowser.Dlna.Didl
         private readonly IMediaSourceManager _mediaSourceManager;
         private readonly ILogger _logger;
         private readonly ILibraryManager _libraryManager;
+        private readonly IMediaEncoder _mediaEncoder;
 
-        public DidlBuilder(DeviceProfile profile, User user, IImageProcessor imageProcessor, string serverAddress, string accessToken, IUserDataManager userDataManager, ILocalizationManager localization, IMediaSourceManager mediaSourceManager, ILogger logger, ILibraryManager libraryManager)
+        public DidlBuilder(DeviceProfile profile, User user, IImageProcessor imageProcessor, string serverAddress, string accessToken, IUserDataManager userDataManager, ILocalizationManager localization, IMediaSourceManager mediaSourceManager, ILogger logger, ILibraryManager libraryManager, IMediaEncoder mediaEncoder)
         {
             _profile = profile;
             _imageProcessor = imageProcessor;
@@ -53,6 +55,7 @@ namespace MediaBrowser.Dlna.Didl
             _mediaSourceManager = mediaSourceManager;
             _logger = logger;
             _libraryManager = libraryManager;
+            _mediaEncoder = mediaEncoder;
             _accessToken = accessToken;
             _user = user;
         }
@@ -93,10 +96,10 @@ namespace MediaBrowser.Dlna.Didl
             }
             else
             {
-                var parent = item.DisplayParent;
-                if (parent != null)
+                var parent = item.DisplayParentId;
+                if (parent.HasValue)
                 {
-                    element.SetAttribute("parentID", GetClientId(parent, null));
+                    element.SetAttribute("parentID", GetClientId(parent.Value, null));
                 }
             }
 
@@ -142,7 +145,7 @@ namespace MediaBrowser.Dlna.Didl
             {
                 var sources = _mediaSourceManager.GetStaticMediaSources(video, true, _user).ToList();
 
-                streamInfo = new StreamBuilder(GetStreamBuilderLogger(options)).BuildVideoItem(new VideoOptions
+                streamInfo = new StreamBuilder(_mediaEncoder, GetStreamBuilderLogger(options)).BuildVideoItem(new VideoOptions
                 {
                     ItemId = GetClientId(video),
                     MediaSources = sources,
@@ -171,7 +174,6 @@ namespace MediaBrowser.Dlna.Didl
                 streamInfo.TargetPacketLength,
                 streamInfo.TranscodeSeekInfo,
                 streamInfo.IsTargetAnamorphic,
-                streamInfo.IsTargetCabac,
                 streamInfo.TargetRefFrames,
                 streamInfo.TargetVideoStreamCount,
                 streamInfo.TargetAudioStreamCount,
@@ -188,15 +190,15 @@ namespace MediaBrowser.Dlna.Didl
                 {
                     var subtitleAdded = AddSubtitleElement(container, subtitle);
 
-					if (subtitleAdded && _profile.EnableSingleSubtitleLimit) 
-					{
-						break;
-					}
+                    if (subtitleAdded && _profile.EnableSingleSubtitleLimit)
+                    {
+                        break;
+                    }
                 }
             }
         }
 
-		private bool AddSubtitleElement(XmlElement container, SubtitleStreamInfo info)
+        private bool AddSubtitleElement(XmlElement container, SubtitleStreamInfo info)
         {
             var subtitleProfile = _profile.SubtitleProfiles
                 .FirstOrDefault(i => string.Equals(info.Format, i.Format, StringComparison.OrdinalIgnoreCase) && i.Method == SubtitleDeliveryMethod.External);
@@ -213,13 +215,13 @@ namespace MediaBrowser.Dlna.Didl
                 // <sec:CaptionInfoEx sec:type="srt">http://192.168.1.3:9999/video.srt</sec:CaptionInfoEx>
                 // <sec:CaptionInfo sec:type="srt">http://192.168.1.3:9999/video.srt</sec:CaptionInfo>
 
-                //var res = container.OwnerDocument.CreateElement("SEC", "CaptionInfoEx");
+                var res = container.OwnerDocument.CreateElement("CaptionInfoEx", "sec");
 
-                //res.InnerText = info.Url;
+                res.InnerText = info.Url;
 
                 //// TODO: attribute needs SEC:
-                //res.SetAttribute("type", info.Format.ToLower());
-                //container.AppendChild(res);
+                res.SetAttribute("type", "sec", info.Format.ToLower());
+                container.AppendChild(res);
             }
             else if (string.Equals(subtitleMode, "smi", StringComparison.OrdinalIgnoreCase))
             {
@@ -243,7 +245,7 @@ namespace MediaBrowser.Dlna.Didl
                 container.AppendChild(res);
             }
 
-			return true;
+            return true;
         }
 
         private void AddVideoResource(XmlElement container, IHasMediaSources video, string deviceId, Filter filter, string contentFeatures, StreamInfo streamInfo)
@@ -317,7 +319,6 @@ namespace MediaBrowser.Dlna.Didl
                 streamInfo.TargetPacketLength,
                 streamInfo.TargetTimestamp,
                 streamInfo.IsTargetAnamorphic,
-                streamInfo.IsTargetCabac,
                 streamInfo.TargetRefFrames,
                 streamInfo.TargetVideoStreamCount,
                 streamInfo.TargetAudioStreamCount,
@@ -387,7 +388,7 @@ namespace MediaBrowser.Dlna.Didl
             {
                 var sources = _mediaSourceManager.GetStaticMediaSources(audio, true, _user).ToList();
 
-                streamInfo = new StreamBuilder(GetStreamBuilderLogger(options)).BuildAudioItem(new AudioOptions
+                streamInfo = new StreamBuilder(_mediaEncoder, GetStreamBuilderLogger(options)).BuildAudioItem(new AudioOptions
                {
                    ItemId = GetClientId(audio),
                    MediaSources = sources,
@@ -501,14 +502,21 @@ namespace MediaBrowser.Dlna.Didl
             {
                 container.SetAttribute("id", clientId);
 
-                var parent = context ?? folder.DisplayParent;
-                if (parent == null)
+                if (context != null)
                 {
-                    container.SetAttribute("parentID", "0");
+                    container.SetAttribute("parentID", GetClientId(context, null));
                 }
                 else
                 {
-                    container.SetAttribute("parentID", GetClientId(parent, null));
+                    var parent = folder.DisplayParentId;
+                    if (!parent.HasValue)
+                    {
+                        container.SetAttribute("parentID", "0");
+                    }
+                    else
+                    {
+                        container.SetAttribute("parentID", GetClientId(parent.Value, null));
+                    }
                 }
             }
 
@@ -981,7 +989,10 @@ namespace MediaBrowser.Dlna.Didl
 
             if (item != null)
             {
-                return GetImageInfo(item, ImageType.Primary);
+                if (item.HasImage(ImageType.Primary))
+                {
+                    return GetImageInfo(item, ImageType.Primary);
+                }
             }
 
             return null;
@@ -1058,7 +1069,12 @@ namespace MediaBrowser.Dlna.Didl
 
         public static string GetClientId(BaseItem item, StubType? stubType)
         {
-            var id = item.Id.ToString("N");
+            return GetClientId(item.Id, stubType);
+        }
+
+        public static string GetClientId(Guid idValue, StubType? stubType)
+        {
+            var id = idValue.ToString("N");
 
             if (stubType.HasValue)
             {

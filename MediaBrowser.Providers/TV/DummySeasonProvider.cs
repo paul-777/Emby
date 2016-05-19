@@ -1,5 +1,4 @@
-﻿using MediaBrowser.Common.Extensions;
-using MediaBrowser.Controller.Configuration;
+﻿using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Localization;
@@ -11,7 +10,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
-using MediaBrowser.Common.IO;
 
 namespace MediaBrowser.Providers.TV
 {
@@ -42,7 +40,7 @@ namespace MediaBrowser.Providers.TV
 
             if (hasNewSeasons)
             {
-                var directoryService = new DirectoryService(_fileSystem);
+                //var directoryService = new DirectoryService(_fileSystem);
 
                 //await series.RefreshMetadata(new MetadataRefreshOptions(directoryService), cancellationToken).ConfigureAwait(false);
 
@@ -115,7 +113,7 @@ namespace MediaBrowser.Providers.TV
             {
                 Name = seasonName,
                 IndexNumber = seasonNumber,
-                Id = (series.Id + (seasonNumber ?? -1).ToString(_usCulture) + seasonName).GetMBId(typeof(Season))
+                Id = _libraryManager.GetNewItemId((series.Id + (seasonNumber ?? -1).ToString(_usCulture) + seasonName), typeof(Season))
             };
 
             season.SetParent(series);
@@ -165,7 +163,7 @@ namespace MediaBrowser.Providers.TV
 
                     // Season does not have a number
                     // Remove if there are no episodes directly in series without a season number
-                    return episodes.All(s => s.ParentIndexNumber.HasValue || !s.IsInSeasonFolder);
+                    return episodes.All(s => s.ParentIndexNumber.HasValue || s.IsInSeasonFolder);
                 })
                 .ToList();
 

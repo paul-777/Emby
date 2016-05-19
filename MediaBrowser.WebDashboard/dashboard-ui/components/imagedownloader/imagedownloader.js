@@ -1,4 +1,4 @@
-﻿define(['paperdialoghelper', 'paper-checkbox', 'paper-dialog', 'paper-fab'], function (paperDialogHelper) {
+﻿define(['dialogHelper', 'jQuery', 'paper-checkbox', 'paper-fab', 'paper-icon-button-light'], function (dialogHelper, $) {
 
     var currentItemId;
     var currentItemType;
@@ -56,7 +56,7 @@
     }
 
     function renderRemoteImages(page, imagesResult, imageType, startIndex, limit) {
-        $('.availableImagesPaging', page).html(getPagingHtml(startIndex, limit, imagesResult.TotalRecordCount)).trigger('create');
+        $('.availableImagesPaging', page).html(getPagingHtml(startIndex, limit, imagesResult.TotalRecordCount));
 
         var html = '';
 
@@ -107,8 +107,8 @@
         if (showControls) {
             html += '<div data-role="controlgroup" data-type="horizontal" style="display:inline-block;">';
 
-            html += '<paper-icon-button icon="arrow-back" title="' + Globalize.translate('ButtonPreviousPage') + '" class="btnPreviousPage" ' + (startIndex ? '' : 'disabled') + '></paper-icon-button>';
-            html += '<paper-icon-button icon="arrow-forward" title="' + Globalize.translate('ButtonNextPage') + '" class="btnNextPage" ' + (startIndex + limit >= totalRecordCount ? 'disabled' : '') + '></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" title="' + Globalize.translate('ButtonPreviousPage') + '" class="btnPreviousPage" ' + (startIndex ? '' : 'disabled') + '><iron-icon icon="arrow-back"></iron-icon></button>';
+            html += '<button is="paper-icon-button-light" title="' + Globalize.translate('ButtonNextPage') + '" class="btnNextPage" ' + (startIndex + limit >= totalRecordCount ? 'disabled' : '') + '><iron-icon icon="arrow-forward"></iron-icon></button>';
             html += '</div>';
         }
 
@@ -130,8 +130,8 @@
         ApiClient.downloadRemoteImage(options).then(function () {
 
             hasChanges = true;
-            var dlg = $(page).parents('paper-dialog')[0];
-            paperDialogHelper.close(dlg);
+            var dlg = $(page).parents('.dialog')[0];
+            dialogHelper.close(dlg);
         });
     }
 
@@ -223,7 +223,7 @@
             html += '</div>';
         }
 
-        html += '<paper-icon-button icon="cloud-download" class="btnDownloadRemoteImage" raised data-imageprovider="' + image.ProviderName + '" data-imageurl="' + image.Url + '" data-imagetype="' + image.Type + '" title="' + Globalize.translate('ButtonDownload') + '"></paper-icon-button>';
+        html += '<button is="paper-icon-button-light" class="btnDownloadRemoteImage" raised data-imageprovider="' + image.ProviderName + '" data-imageurl="' + image.Url + '" data-imagetype="' + image.Type + '" title="' + Globalize.translate('ButtonDownload') + '"><iron-icon icon="cloud-download"></iron-icon></button>';
 
         html += '</div>';
         html += '</div>';
@@ -271,7 +271,7 @@
             currentItemId = itemId;
             currentItemType = itemType;
 
-            var dlg = paperDialogHelper.createDialog({
+            var dlg = dialogHelper.createDialog({
                 size: 'fullscreen-border',
                 lockScroll: true
             });
@@ -296,16 +296,16 @@
             document.body.appendChild(dlg);
 
             // Has to be assigned a z-index after the call to .open() 
-            $(dlg).on('iron-overlay-closed', onDialogClosed);
+            $(dlg).on('close', onDialogClosed);
 
-            paperDialogHelper.open(dlg);
+            dialogHelper.open(dlg);
 
             var editorContent = dlg.querySelector('.editorContent');
             initEditor(editorContent);
 
             $('.btnCloseDialog', dlg).on('click', function () {
 
-                paperDialogHelper.close(dlg);
+                dialogHelper.close(dlg);
             });
 
             reloadBrowsableImages(editorContent);
@@ -324,7 +324,7 @@
     return {
         show: function (itemId, itemType, imageType) {
 
-            var deferred = DeferredBuilder.Deferred();
+            var deferred = jQuery.Deferred();
 
             currentDeferred = deferred;
             hasChanges = false;

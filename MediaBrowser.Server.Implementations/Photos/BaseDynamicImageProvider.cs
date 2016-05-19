@@ -1,6 +1,5 @@
 ﻿using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Extensions;
-using MediaBrowser.Common.IO;
 using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -14,10 +13,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
+using MediaBrowser.Model.Configuration;
 
 namespace MediaBrowser.Server.Implementations.Photos
 {
-    public abstract class BaseDynamicImageProvider<T> : IHasChangeMonitor, IForcedProvider, ICustomMetadataProvider<T>, IHasOrder
+    public abstract class BaseDynamicImageProvider<T> : IHasItemChangeMonitor, IForcedProvider, ICustomMetadataProvider<T>, IHasOrder
         where T : IHasMetadata
     {
         protected IFileSystem FileSystem { get; private set; }
@@ -47,6 +47,41 @@ namespace MediaBrowser.Server.Implementations.Photos
             };
         }
 
+        private IEnumerable<ImageType> GetEnabledImages(IHasImages item)
+        {
+            //var options = ProviderManager.GetMetadataOptions(item);
+
+            return GetSupportedImages(item);
+            //return GetSupportedImages(item).Where(i => IsEnabled(options, i, item)).ToList();
+        }
+
+        private bool IsEnabled(MetadataOptions options, ImageType type, IHasImages item)
+        {
+            if (type == ImageType.Backdrop)
+            {
+                if (item.LockedFields.Contains(MetadataFields.Backdrops))
+                {
+                    return false;
+                }
+            }
+            else if (type == ImageType.Screenshot)
+            {
+                if (item.LockedFields.Contains(MetadataFields.Screenshots))
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                if (item.LockedFields.Contains(MetadataFields.Images))
+                {
+                    return false;
+                }
+            }
+
+            return options.IsEnabled(type);
+        }
+
         public async Task<ItemUpdateType> FetchAsync(T item, MetadataRefreshOptions options, CancellationToken cancellationToken)
         {
             if (!Supports(item))
@@ -55,7 +90,7 @@ namespace MediaBrowser.Server.Implementations.Photos
             }
 
             var updateType = ItemUpdateType.None;
-            var supportedImages = GetSupportedImages(item).ToList();
+            var supportedImages = GetEnabledImages(item).ToList();
 
             if (supportedImages.Contains(ImageType.Primary))
             {
@@ -69,12 +104,26 @@ namespace MediaBrowser.Server.Implementations.Photos
                 updateType = updateType | thumbResult;
             }
 
-
             return updateType;
         }
 
         protected async Task<ItemUpdateType> FetchAsync(IHasImages item, ImageType imageType, MetadataRefreshOptions options, CancellationToken cancellationToken)
         {
+            var image = item.GetImageInfo(imageType, 0);
+
+            if (image != null)
+            {
+                if (!image.IsLocalFile)
+                {
+                    return ItemUpdateType.None;
+                }
+
+                if (!FileSystem.ContainsSubPath(item.GetInternalMetadataPath(), image.Path))
+                {
+                    return ItemUpdateType.None;
+                }
+            }
+
             var items = await GetItemsWithImages(item).ConfigureAwait(false);
 
             return await FetchToFileInternal(item, items, imageType, cancellationToken).ConfigureAwait(false);
@@ -213,14 +262,14 @@ namespace MediaBrowser.Server.Implementations.Photos
             get { return 7; }
         }
 
-        public bool HasChanged(IHasMetadata item, IDirectoryService directoryService, DateTime date)
+        public bool HasChanged(IHasMetadata item, IDirectoryService directoryServicee)
         {
             if (!Supports(item))
             {
                 return false;
             }
 
-            var supportedImages = GetSupportedImages(item).ToList();
+            var supportedImages = GetEnabledImages(item).ToList();
 
             if (supportedImages.Contains(ImageType.Primary) && HasChanged(item, ImageType.Primary))
             {

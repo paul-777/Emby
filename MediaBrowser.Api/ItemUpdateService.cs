@@ -247,6 +247,12 @@ namespace MediaBrowser.Api
                 hasBudget.Revenue = request.Revenue;
             }
 
+            var hasOriginalTitle = item as IHasOriginalTitle;
+            if (hasOriginalTitle != null)
+            {
+                hasOriginalTitle.OriginalTitle = hasOriginalTitle.OriginalTitle;
+            }
+
             var hasCriticRating = item as IHasCriticRating;
             if (hasCriticRating != null)
             {
@@ -331,7 +337,7 @@ namespace MediaBrowser.Api
                 hasAspectRatio.AspectRatio = request.AspectRatio;
             }
 
-            item.IsLocked = (request.LockData ?? false);
+            item.IsLocked = request.LockData ?? false;
 
             if (request.LockedFields != null)
             {

@@ -1,4 +1,4 @@
-﻿(function ($, window, document) {
+﻿define(['jQuery'], function ($) {
 
     function renderViews(page, user, result) {
 
@@ -107,11 +107,11 @@
 
             if (index > 0) {
 
-                currentHtml += '<paper-icon-button icon="keyboard-arrow-up" class="btnViewItemUp btnViewItemMove" title="' + Globalize.translate('ButtonUp') + '"></paper-icon-button>';
+                currentHtml += '<button type="button" is="paper-icon-button-light" class="btnViewItemUp btnViewItemMove" title="' + Globalize.translate('ButtonUp') + '"><iron-icon icon="keyboard-arrow-up"></iron-icon></button>';
             }
             else if (result.Items.length > 1) {
 
-                currentHtml += '<paper-icon-button icon="keyboard-arrow-down" class="btnViewItemDown btnViewItemMove" title="' + Globalize.translate('ButtonDown') + '"></paper-icon-button>';
+                currentHtml += '<button type="button" is="paper-icon-button-light" class="btnViewItemDown btnViewItemMove" title="' + Globalize.translate('ButtonDown') + '"><iron-icon icon="keyboard-arrow-down"></iron-icon></button>';
             }
 
 
@@ -129,7 +129,7 @@
 
         page.querySelector('.chkDisplayCollectionView').checked = user.Configuration.DisplayCollectionsView || false;
         page.querySelector('.chkHidePlayedFromLatest').checked = user.Configuration.HidePlayedInLatest || false;
-        page.querySelector('.chkDisplayChannelsInline').checked = user.Configuration.DisplayChannelsInline || false;
+        page.querySelector('.chkDisplayChannelsInline').checked = !(user.Configuration.EnableChannelView || false);
 
         $('#selectHomeSection1', page).val(displayPreferences.CustomPrefs.home0 || '');
         $('#selectHomeSection2', page).val(displayPreferences.CustomPrefs.home1 || '');
@@ -154,12 +154,19 @@
         });
     }
 
+    function displayPreferencesKey() {
+        if (AppInfo.isNativeApp) {
+            return 'Emby Mobile';
+        }
+
+        return 'webclient';
+    }
     function saveUser(page, user, displayPreferences) {
 
         user.Configuration.DisplayCollectionsView = page.querySelector('.chkDisplayCollectionView').checked;
         user.Configuration.HidePlayedInLatest = page.querySelector('.chkHidePlayedFromLatest').checked;
 
-        user.Configuration.DisplayChannelsInline = page.querySelector('.chkDisplayChannelsInline').checked;
+        user.Configuration.EnableChannelView = !page.querySelector('.chkDisplayChannelsInline').checked;
 
         user.Configuration.LatestItemsExcludes = $(".chkIncludeInLatest", page).get().filter(function (i) {
 
@@ -200,7 +207,7 @@
         displayPreferences.CustomPrefs.home2 = $('#selectHomeSection3', page).val();
         displayPreferences.CustomPrefs.home3 = $('#selectHomeSection4', page).val();
 
-        return ApiClient.updateDisplayPreferences('home', displayPreferences, user.Id, AppSettings.displayPreferencesKey()).then(function () {
+        return ApiClient.updateDisplayPreferences('home', displayPreferences, user.Id, displayPreferencesKey()).then(function () {
 
             return ApiClient.updateUserConfiguration(user.Id, user.Configuration);
         });
@@ -218,13 +225,15 @@
 
         ApiClient.getUser(userId).then(function (user) {
 
-            ApiClient.getDisplayPreferences('home', user.Id, AppSettings.displayPreferencesKey()).then(function (displayPreferences) {
+            ApiClient.getDisplayPreferences('home', user.Id, displayPreferencesKey()).then(function (displayPreferences) {
 
                 saveUser(page, user, displayPreferences).then(function () {
 
                     Dashboard.hideLoadingMsg();
                     if (!AppInfo.enableAutoSave) {
-                        Dashboard.alert(Globalize.translate('SettingsSaved'));
+                        require(['toast'], function (toast) {
+                            toast(Globalize.translate('SettingsSaved'));
+                        });
                     }
 
                 }, function () {
@@ -306,7 +315,7 @@
 
         ApiClient.getUser(userId).then(function (user) {
 
-            ApiClient.getDisplayPreferences('home', user.Id, AppSettings.displayPreferencesKey()).then(function (result) {
+            ApiClient.getDisplayPreferences('home', user.Id, displayPreferencesKey()).then(function (result) {
 
                 loadForm(page, user, result);
 
@@ -317,10 +326,10 @@
     pageIdOn('pagebeforehide', "homeScreenPreferencesPage", function () {
 
         var page = this;
-        
+
         if (AppInfo.enableAutoSave) {
             save(page);
         }
     });
 
-})(jQuery, window, document);
+});

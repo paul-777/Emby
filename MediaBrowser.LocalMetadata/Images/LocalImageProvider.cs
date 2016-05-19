@@ -6,7 +6,6 @@ using MediaBrowser.Model.Entities;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using CommonIO;
 
@@ -176,7 +175,7 @@ namespace MediaBrowser.LocalMetadata.Images
                 "default"
             };
 
-            if (item is MusicAlbum || item is MusicArtist || item is Photo)
+            if (item is MusicAlbum || item is MusicArtist || item is PhotoAlbum)
             {
                 // these prefer folder
                 names.Insert(0, "poster");

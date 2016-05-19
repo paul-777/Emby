@@ -1,4 +1,4 @@
-﻿(function ($, document, window) {
+﻿define(['jQuery'], function ($) {
 
     function loadPage(page, config) {
 
@@ -34,10 +34,11 @@
 
         if ($('#selectVideoDecoder', form).val()) {
 
-            Dashboard.alert({
-                callback: onDecoderConfirmed,
-                title: Globalize.translate('TitleHardwareAcceleration'),
-                message: Globalize.translate('HardwareAccelerationWarning')
+            require(['alert'], function (alert) {
+                alert({
+                    title: Globalize.translate('TitleHardwareAcceleration'),
+                    text: Globalize.translate('HardwareAccelerationWarning')
+                }).then(onDecoderConfirmed);
             });
 
         } else {
@@ -47,6 +48,26 @@
 
         // Disable default form submission
         return false;
+    }
+
+    function getTabs() {
+        return [
+        {
+            href: 'cinemamodeconfiguration.html',
+            name: Globalize.translate('TabCinemaMode')
+        },
+         {
+             href: 'playbackconfiguration.html',
+             name: Globalize.translate('TabResumeSettings')
+         },
+         {
+             href: 'streamingsettings.html',
+             name: Globalize.translate('TabStreaming')
+         },
+         {
+             href: 'encodingsettings.html',
+             name: Globalize.translate('TabTranscoding')
+         }];
     }
 
     $(document).on('pageinit', "#encodingSettingsPage", function () {
@@ -83,6 +104,7 @@
 
         Dashboard.showLoadingMsg();
 
+        LibraryMenu.setTabs('playback',3, getTabs);
         var page = this;
 
         ApiClient.getNamedConfiguration("encoding").then(function (config) {
@@ -92,4 +114,4 @@
         });
     });
 
-})(jQuery, document, window);
+});

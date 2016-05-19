@@ -1,4 +1,4 @@
-﻿(function ($, document) {
+﻿define(['jQuery'], function ($) {
 
     var guideController;
 
@@ -44,7 +44,7 @@
         ApiClient.ajax({
 
             type: 'GET',
-            url: 'components/tvproviders/' + type + '.template.html'
+            url: 'components/tvproviders/' + type.toLowerCase() + '.template.html'
 
         }).then(function (html) {
 
@@ -98,4 +98,4 @@
         reload(page);
     });
 
-})(jQuery, document, window);
+});

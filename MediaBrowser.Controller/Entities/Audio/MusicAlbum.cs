@@ -34,7 +34,26 @@ namespace MediaBrowser.Controller.Entities.Audio
         {
             get
             {
-                return GetParents().OfType<MusicArtist>().FirstOrDefault();
+                var artist = GetParents().OfType<MusicArtist>().FirstOrDefault();
+
+                if (artist == null)
+                {
+                    var name = AlbumArtist;
+                    if (!string.IsNullOrWhiteSpace(name))
+                    {
+                        artist = LibraryManager.GetArtist(name);
+                    }
+                }
+                return artist;
+            }
+        }
+
+        [IgnoreDataMember]
+        public override bool SupportsCumulativeRunTimeTicks
+        {
+            get
+            {
+                return true;
             }
         }
 
@@ -86,27 +105,34 @@ namespace MediaBrowser.Controller.Entities.Audio
 
         public List<string> Artists { get; set; }
 
-        /// <summary>
-        /// Gets the user data key.
-        /// </summary>
-        /// <returns>System.String.</returns>
-        protected override string CreateUserDataKey()
+        public override List<string> GetUserDataKeys()
         {
-            var id = this.GetProviderId(MetadataProviders.MusicBrainzReleaseGroup);
+            var list = base.GetUserDataKeys();
+
+            if (ConfigurationManager.Configuration.EnableStandaloneMusicKeys)
+            {
+                var albumArtist = AlbumArtist;
+                if (!string.IsNullOrWhiteSpace(albumArtist))
+                {
+                    list.Insert(0, albumArtist + "-" + Name);
+                }
+            }
+
+            var id = this.GetProviderId(MetadataProviders.MusicBrainzAlbum);
 
             if (!string.IsNullOrWhiteSpace(id))
             {
-                return "MusicAlbum-MusicBrainzReleaseGroup-" + id;
+                list.Insert(0, "MusicAlbum-Musicbrainz-" + id);
             }
 
-            id = this.GetProviderId(MetadataProviders.MusicBrainzAlbum);
+            id = this.GetProviderId(MetadataProviders.MusicBrainzReleaseGroup);
 
             if (!string.IsNullOrWhiteSpace(id))
             {
-                return "MusicAlbum-Musicbrainz-" + id;
+                list.Insert(0, "MusicAlbum-MusicBrainzReleaseGroup-" + id);
             }
 
-            return base.CreateUserDataKey();
+            return list;
         }
 
         protected override bool GetBlockUnratedValue(UserPolicy config)
@@ -125,7 +151,7 @@ namespace MediaBrowser.Controller.Entities.Audio
 
             id.AlbumArtists = AlbumArtists;
 
-            var artist = GetParents().OfType<MusicArtist>().FirstOrDefault();
+            var artist = MusicArtist;
 
             if (artist != null)
             {

@@ -1,19 +1,18 @@
-﻿(function ($, window) {
+﻿define(['jQuery'], function ($) {
 
     function deletePlugin(page, uniqueid, name) {
 
         var msg = Globalize.translate('UninstallPluginConfirmation').replace("{0}", name);
 
-        Dashboard.confirm(msg, Globalize.translate('UninstallPluginHeader'), function (result) {
-
-            if (result) {
+        require(['confirm'], function (confirm) {
+            confirm(msg, Globalize.translate('UninstallPluginHeader')).then(function () {
                 Dashboard.showLoadingMsg();
 
                 ApiClient.uninstallPlugin(uniqueid).then(function () {
 
                     reloadList(page);
                 });
-            }
+            });
         });
     }
 
@@ -85,7 +84,7 @@
         html += '<div class="cardFooter">';
 
         html += '<div class="cardText" style="text-align:right; float:right;padding-top:5px;">';
-        html += '<paper-icon-button icon="' + AppInfo.moreIcon + '" class="btnCardMenu"></paper-icon-button>';
+        html += '<button type="button" is="paper-icon-button-light" class="btnCardMenu"><iron-icon icon="' + AppInfo.moreIcon + '"></iron-icon></button>';
         html += "</div>";
 
         html += "<div class='cardText'>";
@@ -110,7 +109,7 @@
 
     function renderPlugins(page, plugins, showNoPluginsMessage) {
 
-        ApiClient.getJSON(ApiClient.getUrl("dashboard/configurationpages") + "?pageType=PluginConfiguration").then(function (configPages) {
+        ApiClient.getJSON(ApiClient.getUrl("web/configurationpages") + "?pageType=PluginConfiguration").then(function (configPages) {
 
             populateList(page, plugins, configPages, showNoPluginsMessage);
 
@@ -147,10 +146,10 @@
                 html += '</div>';
             }
 
-            $('.installedPlugins', page).html(html).trigger('create');
+            $('.installedPlugins', page).html(html);
         } else {
 
-            var elem = $('.installedPlugins', page).html(html).trigger('create');
+            var elem = $('.installedPlugins', page).html(html);
 
             $('.noConfigPluginCard', elem).on('click', function () {
                 showNoConfigurationMessage();
@@ -225,8 +224,21 @@
         });
     }
 
+    function getTabs() {
+        return [
+        {
+            href: 'plugins.html',
+            name: Globalize.translate('TabMyPlugins')
+        },
+         {
+             href: 'plugincatalog.html',
+             name: Globalize.translate('TabCatalog')
+         }];
+    }
+
     $(document).on('pageshow', "#pluginsPage", function () {
 
+        LibraryMenu.setTabs('plugins', 0, getTabs);
         reloadList(this);
     });
 
@@ -234,4 +246,4 @@
         renderPlugins: renderPlugins
     };
 
-})(jQuery, window);
+});

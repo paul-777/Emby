@@ -1,4 +1,4 @@
-﻿(function ($, document, window) {
+﻿define(['jQuery'], function ($) {
 
     function loadProfiles(page) {
 
@@ -58,7 +58,7 @@
                 html += '</paper-item-body>';
 
                 if (profile.Type == 'User') {
-                    html += '<paper-icon-button icon="delete" class="btnDeleteProfile" data-profileid="' + profile.Id + '" title="' + Globalize.translate('ButtonDelete') + '"></paper-icon-button>';
+                    html += '<button type="button" is="paper-icon-button-light" class="btnDeleteProfile" data-profileid="' + profile.Id + '" title="' + Globalize.translate('ButtonDelete') + '"><iron-icon icon="delete"></iron-icon></button>';
                 }
 
                 html += '</paper-icon-item>';
@@ -80,9 +80,9 @@
 
     function deleteProfile(page, id) {
 
-        Dashboard.confirm(Globalize.translate('MessageConfirmProfileDeletion'), Globalize.translate('HeaderConfirmProfileDeletion'), function (result) {
+        require(['confirm'], function (confirm) {
 
-            if (result) {
+            confirm(Globalize.translate('MessageConfirmProfileDeletion'), Globalize.translate('HeaderConfirmProfileDeletion')).then(function () {
 
                 Dashboard.showLoadingMsg();
 
@@ -96,18 +96,29 @@
 
                     loadProfiles(page);
                 });
-            }
-
+            });
         });
+    }
 
+    function getTabs() {
+        return [
+        {
+            href: 'dlnasettings.html',
+            name: Globalize.translate('TabSettings')
+        },
+         {
+             href: 'dlnaprofiles.html',
+             name: Globalize.translate('TabProfiles')
+         }];
     }
 
     $(document).on('pageshow', "#dlnaProfilesPage", function () {
 
+        LibraryMenu.setTabs('dlna', 1, getTabs);
         var page = this;
 
         loadProfiles(page);
 
     });
 
-})(jQuery, document, window);
+});

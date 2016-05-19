@@ -1,4 +1,4 @@
-﻿(function ($, document) {
+﻿define(['jQuery'], function ($) {
 
     function reload(page) {
 
@@ -9,13 +9,9 @@
 
     function loadNextUp(page) {
 
-        var limit = AppInfo.hasLowImageBandwidth ?
-         16 :
-         24;
-
         var query = {
 
-            Limit: limit,
+            Limit: 24,
             Fields: "PrimaryImageAspectRatio,SeriesInfo,DateCreated,SyncInfo",
             UserId: Dashboard.getCurrentUserId(),
             ImageTypeLimit: 1,
@@ -50,15 +46,16 @@
             elem.innerHTML = html;
             ImageLoader.lazyChildren(elem);
             Dashboard.hideLoadingMsg();
-
-            LibraryBrowser.setLastRefreshed(page);
         });
     }
+    return function (view, params, tabContent) {
 
-    window.HomePage.renderNextUp = function (page, tabContent) {
-        if (LibraryBrowser.needsRefresh(tabContent)) {
+        var self = this;
+
+        self.renderTab = function () {
+
             reload(tabContent);
-        }
+        };
     };
 
-})(jQuery, document);
+});

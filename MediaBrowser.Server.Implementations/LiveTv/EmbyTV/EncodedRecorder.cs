@@ -12,6 +12,7 @@ using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.LiveTv;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Serialization;
 
@@ -23,23 +24,55 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
         private readonly IFileSystem _fileSystem;
         private readonly IMediaEncoder _mediaEncoder;
         private readonly IApplicationPaths _appPaths;
+        private readonly LiveTvOptions _liveTvOptions;
         private bool _hasExited;
         private Stream _logFileStream;
         private string _targetPath;
         private Process _process;
         private readonly IJsonSerializer _json;
+        private readonly TaskCompletionSource<bool> _taskCompletionSource = new TaskCompletionSource<bool>();
 
-        public EncodedRecorder(ILogger logger, IFileSystem fileSystem, IMediaEncoder mediaEncoder, IApplicationPaths appPaths, IJsonSerializer json)
+        public EncodedRecorder(ILogger logger, IFileSystem fileSystem, IMediaEncoder mediaEncoder, IApplicationPaths appPaths, IJsonSerializer json, LiveTvOptions liveTvOptions)
         {
             _logger = logger;
             _fileSystem = fileSystem;
             _mediaEncoder = mediaEncoder;
             _appPaths = appPaths;
             _json = json;
+            _liveTvOptions = liveTvOptions;
         }
 
-        public async Task Record(MediaSourceInfo mediaSource, string targetFile, Action onStarted, CancellationToken cancellationToken)
+        public string GetOutputPath(MediaSourceInfo mediaSource, string targetFile)
         {
+            if (_liveTvOptions.EnableOriginalAudioWithEncodedRecordings)
+            {
+                // if the audio is aac_latm, stream copying to mp4 will fail
+                var streams = mediaSource.MediaStreams ?? new List<MediaStream>();
+                if (streams.Any(i => i.Type == MediaStreamType.Audio && (i.Codec ?? string.Empty).IndexOf("aac", StringComparison.OrdinalIgnoreCase) != -1))
+                {
+                    return Path.ChangeExtension(targetFile, ".mkv");
+                }
+            }
+
+            return Path.ChangeExtension(targetFile, ".mp4");
+        }
+
+        public async Task Record(MediaSourceInfo mediaSource, string targetFile, TimeSpan duration, Action onStarted, CancellationToken cancellationToken)
+        {
+            if (mediaSource.RunTimeTicks.HasValue)
+            {
+                // The media source already has a fixed duration
+                // But add another stop 1 minute later just in case the recording gets stuck for any reason
+                var durationToken = new CancellationTokenSource(duration.Add(TimeSpan.FromMinutes(1)));
+                cancellationToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, durationToken.Token).Token;
+            }
+            else
+            {
+                // The media source if infinite so we need to handle stopping ourselves
+                var durationToken = new CancellationTokenSource(duration);
+                cancellationToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, durationToken.Token).Token;
+            }
+
             _targetPath = targetFile;
             _fileSystem.CreateDirectory(Path.GetDirectoryName(targetFile));
 
@@ -56,7 +89,7 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
                     RedirectStandardInput = true,
 
                     FileName = _mediaEncoder.EncoderPath,
-                    Arguments = GetCommandLineArgs(mediaSource, targetFile),
+                    Arguments = GetCommandLineArgs(mediaSource, targetFile, duration),
 
                     WindowStyle = ProcessWindowStyle.Hidden,
                     ErrorDialog = false
@@ -88,24 +121,22 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
             // MUST read both stdout and stderr asynchronously or a deadlock may occurr
             process.BeginOutputReadLine();
 
+            onStarted();
+
             // Important - don't await the log task or we won't be able to kill ffmpeg when the user stops playback
             StartStreamingLog(process.StandardError.BaseStream, _logFileStream);
 
-            // Wait for the file to exist before proceeeding
-            while (!_hasExited)
-            {
-                await Task.Delay(100, cancellationToken).ConfigureAwait(false);
-            }
+            await _taskCompletionSource.Task.ConfigureAwait(false);
         }
 
-        private string GetCommandLineArgs(MediaSourceInfo mediaSource, string targetFile)
+        private string GetCommandLineArgs(MediaSourceInfo mediaSource, string targetFile, TimeSpan duration)
         {
             string videoArgs;
             if (EncodeVideo(mediaSource))
             {
                 var maxBitrate = 25000000;
                 videoArgs = string.Format(
-                        "-codec:v:0 libx264 -force_key_frames expr:gte(t,n_forced*5) {0} -pix_fmt yuv420p -preset superfast -crf 23 -b:v {1} -maxrate {1} -bufsize ({1}*2) -vsync vfr -profile:v high -level 41",
+                        "-codec:v:0 libx264 -force_key_frames expr:gte(t,n_forced*5) {0} -pix_fmt yuv420p -preset superfast -crf 23 -b:v {1} -maxrate {1} -bufsize ({1}*2) -vsync -1 -profile:v high -level 41",
                         GetOutputSizeParam(),
                         maxBitrate.ToString(CultureInfo.InvariantCulture));
             }
@@ -114,14 +145,14 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
                 videoArgs = "-codec:v:0 copy";
             }
 
-            var commandLineArgs = "-fflags +genpts -i \"{0}\" -sn {2} -map_metadata -1 -threads 0 {3} -y \"{1}\"";
+            var commandLineArgs = "-fflags +genpts -async 1 -vsync -1 -i \"{0}\" -t {4} -sn {2} -map_metadata -1 -threads 0 {3} -y \"{1}\"";
 
             if (mediaSource.ReadAtNativeFramerate)
             {
                 commandLineArgs = "-re " + commandLineArgs;
             }
 
-            commandLineArgs = string.Format(commandLineArgs, mediaSource.Path, targetFile, videoArgs, GetAudioArgs(mediaSource));
+            commandLineArgs = string.Format(commandLineArgs, mediaSource.Path, targetFile, videoArgs, GetAudioArgs(mediaSource), _mediaEncoder.GetTimeParameter(duration.Ticks));
 
             return commandLineArgs;
         }
@@ -130,7 +161,7 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
         {
             var copyAudio = new[] { "aac", "mp3" };
             var mediaStreams = mediaSource.MediaStreams ?? new List<MediaStream>();
-            if (mediaStreams.Any(i => i.Type == MediaStreamType.Audio && copyAudio.Contains(i.Codec, StringComparer.OrdinalIgnoreCase)))
+            if (_liveTvOptions.EnableOriginalAudioWithEncodedRecordings || mediaStreams.Any(i => i.Type == MediaStreamType.Audio && copyAudio.Contains(i.Codec, StringComparer.OrdinalIgnoreCase)))
             {
                 return "-codec:a:0 copy";
             }
@@ -141,7 +172,7 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
             {
                 audioChannels = audioStream.Channels ?? audioChannels;
             }
-            return "-codec:a:0 aac -strict experimental -ab 320000 -ac " + audioChannels.ToString(CultureInfo.InvariantCulture);
+            return "-codec:a:0 aac -strict experimental -ab 320000";
         }
 
         private bool EncodeVideo(MediaSourceInfo mediaSource)
@@ -176,9 +207,6 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
 
                     //process.Kill();
                     _process.StandardInput.WriteLine("q");
-
-                    // Need to wait because killing is asynchronous
-                    _process.WaitForExit(5000);
                 }
                 catch (Exception ex)
                 {
@@ -195,16 +223,27 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
         {
             _hasExited = true;
 
-            _logger.Debug("Disposing stream resources");
             DisposeLogStream();
 
             try
             {
-                _logger.Info("FFMpeg exited with code {0}", process.ExitCode);
+                var exitCode = process.ExitCode;
+
+                _logger.Info("FFMpeg recording exited with code {0} for {1}", exitCode, _targetPath);
+
+                if (exitCode == 0)
+                {
+                    _taskCompletionSource.TrySetResult(true);
+                }
+                else
+                {
+                    _taskCompletionSource.TrySetException(new Exception(string.Format("Recording for {0} failed. Exit code {1}", _targetPath, exitCode)));
+                }
             }
             catch
             {
-                _logger.Error("FFMpeg exited with an error.");
+                _logger.Error("FFMpeg recording exited with an error for {0}.", _targetPath);
+                _taskCompletionSource.TrySetException(new Exception(string.Format("Recording for {0} failed", _targetPath)));
             }
         }
 
@@ -218,7 +257,7 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
                 }
                 catch (Exception ex)
                 {
-                    _logger.ErrorException("Error disposing log stream", ex);
+                    _logger.ErrorException("Error disposing recording log stream", ex);
                 }
 
                 _logFileStream = null;
@@ -248,7 +287,7 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
             }
             catch (Exception ex)
             {
-                _logger.ErrorException("Error reading ffmpeg log", ex);
+                _logger.ErrorException("Error reading ffmpeg recording log", ex);
             }
         }
     }

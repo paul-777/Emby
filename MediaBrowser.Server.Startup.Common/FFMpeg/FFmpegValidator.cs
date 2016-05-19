@@ -1,12 +1,8 @@
 ﻿using MediaBrowser.Common.Configuration;
-using MediaBrowser.Common.Extensions;
 using MediaBrowser.Model.Logging;
 using System;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
-using System.Text;
-using MediaBrowser.Common.IO;
 using System.Collections.Generic;
 using CommonIO;
 
@@ -46,6 +42,7 @@ namespace MediaBrowser.Server.Startup.Common.FFMpeg
             catch
             {
             }
+            //_logger.Debug("ffmpeg decoder query result: {0}", output ?? string.Empty);
 
             var found = new List<string>();
             var required = new[]
@@ -82,6 +79,7 @@ namespace MediaBrowser.Server.Startup.Common.FFMpeg
             catch
             {
             }
+            //_logger.Debug("ffmpeg encoder query result: {0}", output ?? string.Empty);
 
             var found = new List<string>();
             var required = new[]
@@ -93,8 +91,8 @@ namespace MediaBrowser.Server.Startup.Common.FFMpeg
                 //"libvpx",
                 //"libvpx-vp9",
                 "aac",
-                "ac3",
                 "libmp3lame",
+                "libopus",
                 //"libvorbis",
                 "srt"
             };

@@ -1,4 +1,4 @@
-﻿(function () {
+﻿define(['appSettings', 'datetime', 'jQuery', 'mediaInfo', 'scrollStyles', 'paper-icon-button-light'], function (appSettings, datetime, $, mediaInfo) {
 
     function createVideoPlayer(self) {
 
@@ -110,12 +110,12 @@
                 }
 
                 var opt = {
-                    name: name,
+                    name: stream.DisplayTitle || name,
                     id: stream.Index
                 };
 
                 if (stream.Index == currentIndex) {
-                    opt.ironIcon = "check";
+                    opt.selected = true;
                 }
 
                 return opt;
@@ -152,7 +152,7 @@
                 })[0];
                 var videoWidth = videoStream ? videoStream.Width : null;
 
-                var options = qualityoptions.getVideoQualityOptions(AppSettings.maxStreamingBitrate(), videoWidth);
+                var options = qualityoptions.getVideoQualityOptions(appSettings.maxStreamingBitrate(), videoWidth);
 
                 if (isStatic) {
                     options[0].name = "Direct";
@@ -166,7 +166,7 @@
                     };
 
                     if (o.selected) {
-                        opt.ironIcon = "check";
+                        opt.selected = true;
                     }
 
                     return opt;
@@ -229,12 +229,12 @@
                 }
 
                 var opt = {
-                    name: name,
+                    name: stream.DisplayTitle || name,
                     id: stream.Index
                 };
 
                 if (stream.Index == currentIndex) {
-                    opt.ironIcon = "check";
+                    opt.selected = true;
                 }
 
                 return opt;
@@ -320,17 +320,7 @@
 
         self.setCurrentTrackElement = function (index) {
 
-            var textStreams = self.currentMediaSource.MediaStreams.filter(function (s) {
-                return s.DeliveryMethod == 'External';
-            });
-
-            var newStream = textStreams.filter(function (s) {
-                return s.Index == index;
-            })[0];
-
-            var trackIndex = newStream ? textStreams.indexOf(newStream) : -1;
-
-            self.currentMediaRenderer.setCurrentTrackElement(trackIndex);
+            self.currentMediaRenderer.setCurrentTrackElement(index);
         };
 
         self.updateTextStreamUrls = function (startPositionTicks) {
@@ -454,16 +444,10 @@
             var nameHtml = MediaController.getNowPlayingNameHtml(item, false);
             nameHtml = '<div class="videoNowPlayingName">' + nameHtml + '</div>';
 
-            var miscInfo = LibraryBrowser.getMiscInfoHtml(item);
+            var miscInfo = mediaInfo.getPrimaryMediaInfoHtml(item);
             if (miscInfo) {
 
                 nameHtml += '<div class="videoNowPlayingRating">' + miscInfo + '</div>';
-            }
-
-            var ratingHtml = LibraryBrowser.getRatingHtml(item);
-            if (ratingHtml) {
-
-                nameHtml += '<div class="videoNowPlayingRating">' + ratingHtml + '</div>';
             }
 
             if (item.Overview) {
@@ -475,7 +459,7 @@
             html += '</div>';
 
             if (item.Chapters && item.Chapters.length) {
-                html += '<div class="tabScenes nowPlayingTab hiddenScrollX" style="display:none;white-space:nowrap;margin-bottom:2em;">';
+                html += '<div class="tabScenes nowPlayingTab smoothScrollX" style="display:none;white-space:nowrap;margin-bottom:2em;">';
                 var chapterIndex = 0;
                 html += item.Chapters.map(function (c) {
 
@@ -505,7 +489,7 @@
                     if (c.Name) {
                         chapterHtml += '<div class="cardText">' + c.Name + '</div>';
                     }
-                    chapterHtml += '<div class="cardText">' + Dashboard.getDisplayTime(c.StartPositionTicks) + '</div>';
+                    chapterHtml += '<div class="cardText">' + datetime.getDisplayRunningTime(c.StartPositionTicks) + '</div>';
                     chapterHtml += '</div>';
                     chapterHtml += '</div>';
 
@@ -522,7 +506,7 @@
             }
 
             if (item.People && item.People.length) {
-                html += '<div class="tabCast nowPlayingTab hiddenScrollX" style="display:none;white-space:nowrap;">';
+                html += '<div class="tabCast nowPlayingTab smoothScrollX" style="display:none;white-space:nowrap;">';
                 html += item.People.map(function (cast) {
 
                     var personHtml = '<div class="tileItem smallPosterTileItem" style="width:300px;">';
@@ -612,8 +596,8 @@
 
         self.onQualityOptionSelected = function (bitrate) {
 
-            AppSettings.maxStreamingBitrate(bitrate);
-            AppSettings.enableAutomaticBitrateDetection(false);
+            appSettings.maxStreamingBitrate(bitrate);
+            appSettings.enableAutomaticBitrateDetection(false);
 
             self.changeStream(self.getCurrentTicks(), {
                 Bitrate: bitrate
@@ -671,18 +655,28 @@
         function fadeInUp(elem) {
             var keyframes = [
               { transform: 'translate3d(0, 100%, 0)', offset: 0 },
-              { transform: 'none', offset: 1 }];
+              { transform: 'translate3d(0, 0, 0)', offset: 1 }];
             var timing = { duration: 300, iterations: 1 };
-            elem.animate(keyframes, timing);
+
+            if (elem.animate) {
+                elem.animate(keyframes, timing);
+            }
         }
 
         function fadeOutDown(elem) {
-            var keyframes = [{ transform: 'none', offset: 0 },
+            var keyframes = [{ transform: 'translate3d(0, 0, 0)', offset: 0 },
               { transform: 'translate3d(0, 100%, 0)', offset: 1 }];
             var timing = { duration: 300, iterations: 1 };
-            elem.animate(keyframes, timing).onfinish = function () {
+
+            var onFinish = function () {
                 elem.classList.add('hide');
             };
+
+            if (elem.animate) {
+                elem.animate(keyframes, timing).onfinish = onFinish;
+            } else {
+                onFinish();
+            }
         }
 
         function ensureVideoPlayerElements() {
@@ -696,27 +690,26 @@
             html += '<div id="pause" class="status"></div>';
             html += '</div>';
 
-            html += '<div class="videoTopControls hiddenOnIdle">';
+            var hiddenOnIdleClass = AppInfo.isNativeApp && browserInfo.android ? 'hiddenOnIdle hide' : 'hiddenOnIdle';
+
+            html += '<div class="videoTopControls ' + hiddenOnIdleClass + '">';
             html += '<div class="videoTopControlsLogo"></div>';
             html += '<div class="videoAdvancedControls">';
 
-            html += '<paper-icon-button icon="skip-previous" class="previousTrackButton mediaButton videoTrackControl hide" onclick="MediaPlayer.previousTrack();"></paper-icon-button>';
-            html += '<paper-icon-button icon="skip-next" class="nextTrackButton mediaButton videoTrackControl hide" onclick="MediaPlayer.nextTrack();"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" class="previousTrackButton mediaButton videoTrackControl hide" onclick="MediaPlayer.previousTrack();"><iron-icon icon="skip-previous"></iron-icon></button>';
+            html += '<button is="paper-icon-button-light" class="nextTrackButton mediaButton videoTrackControl hide" onclick="MediaPlayer.nextTrack();"><iron-icon icon="skip-next"></iron-icon></button>';
 
             // Embedding onclicks due to issues not firing in cordova safari
-            html += '<paper-icon-button icon="audiotrack" class="mediaButton videoAudioButton" onclick="MediaPlayer.showAudioTracksFlyout();"></paper-icon-button>';
-
-            html += '<paper-icon-button icon="closed-caption" class="mediaButton videoSubtitleButton" onclick="MediaPlayer.showSubtitleMenu();"></paper-icon-button>';
-
-            html += '<paper-icon-button icon="settings" class="mediaButton videoQualityButton" onclick="MediaPlayer.showQualityFlyout();"></paper-icon-button>';
-
-            html += '<paper-icon-button icon="close" class="mediaButton" onclick="MediaPlayer.stop();"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" class="mediaButton videoAudioButton" onclick="MediaPlayer.showAudioTracksFlyout();"><iron-icon icon="audiotrack"></iron-icon></button>';
+            html += '<button is="paper-icon-button-light" class="mediaButton videoSubtitleButton" onclick="MediaPlayer.showSubtitleMenu();"><iron-icon icon="closed-caption"></iron-icon></button>';
+            html += '<button is="paper-icon-button-light" class="mediaButton videoQualityButton" onclick="MediaPlayer.showQualityFlyout();"><iron-icon icon="settings"></iron-icon></button>';
+            html += '<button is="paper-icon-button-light" class="mediaButton" onclick="MediaPlayer.stop();"><iron-icon icon="close"></iron-icon></button>';
 
             html += '</div>'; // videoAdvancedControls
             html += '</div>'; // videoTopControls
 
             // Create controls
-            html += '<div class="videoControls hiddenOnIdle">';
+            html += '<div class="videoControls ' + hiddenOnIdleClass + '">';
 
             html += '<div class="nowPlayingInfo hide">';
             html += '<div class="nowPlayingImage"></div>';
@@ -727,26 +720,24 @@
             html += '</div>'; // guide
 
             html += '<div class="videoControlButtons">';
-            html += '<paper-icon-button icon="skip-previous" class="previousTrackButton mediaButton videoTrackControl hide" onclick="MediaPlayer.previousTrack();"></paper-icon-button>';
-
-            html += '<paper-icon-button id="video-playButton" icon="play-arrow" class="mediaButton unpauseButton" onclick="MediaPlayer.unpause();"></paper-icon-button>';
-            html += '<paper-icon-button id="video-pauseButton" icon="pause" class="mediaButton pauseButton" onclick="MediaPlayer.pause();"></paper-icon-button>';
-
-            html += '<paper-icon-button icon="skip-next" class="nextTrackButton mediaButton videoTrackControl hide" onclick="MediaPlayer.nextTrack();"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" class="previousTrackButton mediaButton videoTrackControl hide" onclick="MediaPlayer.previousTrack();"></iron-icon></button>';
+            html += '<button is="paper-icon-button-light" id="video-playButton" class="mediaButton unpauseButton" onclick="MediaPlayer.unpause();"><iron-icon icon="play-arrow"></iron-icon></button>';
+            html += '<button is="paper-icon-button-light" id="video-pauseButton" class="mediaButton pauseButton" onclick="MediaPlayer.pause();"><iron-icon icon="pause"></iron-icon></button>';
+            html += '<button is="paper-icon-button-light" class="nextTrackButton mediaButton videoTrackControl hide" onclick="MediaPlayer.nextTrack();"><iron-icon icon="skip-next"></iron-icon></button>';
 
             html += '<paper-slider pin step=".1" min="0" max="100" value="0" class="videoPositionSlider" style="display:inline-block;margin-right:2em;"></paper-slider>';
 
             html += '<div class="currentTime">--:--</div>';
 
-            html += '<paper-icon-button icon="volume-up" class="muteButton mediaButton" onclick="MediaPlayer.mute();"></paper-icon-button>';
-            html += '<paper-icon-button icon="volume-off" class="unmuteButton mediaButton" onclick="MediaPlayer.unMute();"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" class="muteButton mediaButton" onclick="MediaPlayer.mute();"><iron-icon icon="volume-up"></iron-icon></button>';
+            html += '<button is="paper-icon-button-light" class="unmuteButton mediaButton" onclick="MediaPlayer.unMute();"><iron-icon icon="volume-off"></iron-icon></button>';
 
             html += '<paper-slider pin step="1" min="0" max="100" value="0" class="videoVolumeSlider" style="width:100px;vertical-align:middle;margin-left:-1em;margin-right:2em;display:inline-block;"></paper-slider>';
 
-            html += '<paper-icon-button icon="cast" class="mediaButton castButton" onclick="MediaController.showPlayerSelection(this, false);" style="width:32px;height:32px;"></paper-icon-button>';
-            html += '<paper-icon-button icon="fullscreen" class="mediaButton fullscreenButton" onclick="MediaPlayer.toggleFullscreen();" id="video-fullscreenButton"></paper-icon-button>';
-            html += '<paper-icon-button icon="info" class="mediaButton infoButton" onclick="MediaPlayer.toggleInfo();"></paper-icon-button>';
-            //html += '<paper-icon-button icon="dvr" class="mediaButton guideButton" onclick="MediaPlayer.toggleGuide();"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" class="mediaButton castButton" onclick="MediaController.showPlayerSelection(this, false);" style="height:32px;width:32px;"><iron-icon icon="cast"></iron-icon></button>';
+            html += '<button is="paper-icon-button-light" class="mediaButton fullscreenButton" onclick="MediaPlayer.toggleFullscreen();" id="video-fullscreenButton"><iron-icon icon="fullscreen"></iron-icon></button>';
+            html += '<button is="paper-icon-button-light" class="mediaButton infoButton" onclick="MediaPlayer.toggleInfo();"><iron-icon icon="info"></iron-icon></button>';
+
             html += '</div>';
 
             html += '</div>'; // videoControls
@@ -789,7 +780,7 @@
                 ticks /= 100;
                 ticks *= value;
 
-                this.pinValue = Dashboard.getDisplayTime(ticks);
+                this.pinValue = datetime.getDisplayRunningTime(ticks);
             };
 
             volumeSlider = $('.videoVolumeSlider', parent).on('change', function () {
@@ -980,7 +971,7 @@
                     // Huge hack alert. Safari doesn't seem to like if the segments aren't available right away when playback starts
                     // This will start the transcoding process before actually feeding the video url into the player
                     // Edit: Also seeing stalls from hls.js
-                    if ((browserInfo.safari || browserInfo.msie || browserInfo.firefox) && !mediaSource.RunTimeTicks && isHls) {
+                    if (!mediaSource.RunTimeTicks && isHls) {
 
                         Dashboard.showLoadingMsg();
                         var hlsPlaylistUrl = streamInfo.url.replace('master.m3u8', 'live.m3u8');
@@ -992,7 +983,12 @@
                         }).then(function () {
                             Dashboard.hideLoadingMsg();
                             streamInfo.url = hlsPlaylistUrl;
-                            self.playVideoInternal(item, mediaSource, startPosition, streamInfo, callback);
+
+                            // add a delay to continue building up the buffer. without this we see failures in safari mobile
+                            setTimeout(function () {
+                                self.playVideoInternal(item, mediaSource, startPosition, streamInfo, callback);
+                            }, 2000);
+
                         }, function () {
                             Dashboard.hideLoadingMsg();
                         });
@@ -1281,4 +1277,4 @@
 
     createVideoPlayer(MediaPlayer);
 
-})();
+});

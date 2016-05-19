@@ -25,8 +25,7 @@ namespace MediaBrowser.Providers.Folders
         {
             return new List<ImageType>
             {
-                ImageType.Primary,
-                ImageType.Thumb
+                ImageType.Primary
             };
         }
 
@@ -57,13 +56,6 @@ namespace MediaBrowser.Providers.Folders
                           ProviderName = Name,
                           Url = url,
                           Type = ImageType.Primary
-                     },
-
-                     new RemoteImageInfo
-                     {
-                          ProviderName = Name,
-                          Url = url,
-                          Type = ImageType.Thumb
                      }
                 });
             }
@@ -85,7 +77,7 @@ namespace MediaBrowser.Providers.Folders
             }
             if (string.Equals(viewType, CollectionType.Music, StringComparison.OrdinalIgnoreCase))
             {
-                return urlPrefix + "music.jpg";
+                //return urlPrefix + "music.jpg";
             }
             if (string.Equals(viewType, CollectionType.Photos, StringComparison.OrdinalIgnoreCase))
             {
@@ -113,7 +105,7 @@ namespace MediaBrowser.Providers.Folders
             }
             if (string.Equals(viewType, CollectionType.HomeVideos, StringComparison.OrdinalIgnoreCase))
             {
-                return urlPrefix + "homevideos.jpg";
+                //return urlPrefix + "homevideos.jpg";
             }
             if (string.Equals(viewType, CollectionType.MusicVideos, StringComparison.OrdinalIgnoreCase))
             {
@@ -121,11 +113,11 @@ namespace MediaBrowser.Providers.Folders
             }
             if (string.Equals(viewType, CollectionType.BoxSets, StringComparison.OrdinalIgnoreCase))
             {
-                return urlPrefix + "collections.jpg";
+                //return urlPrefix + "collections.jpg";
             }
             if (string.IsNullOrWhiteSpace(viewType))
             {
-                return urlPrefix + "generic.jpg";
+                //return urlPrefix + "generic.jpg";
             }
 
             return null;
@@ -165,7 +157,7 @@ namespace MediaBrowser.Providers.Folders
             });
         }
 
-        public bool HasChanged(IHasMetadata item, MetadataStatus status, IDirectoryService directoryService)
+        public bool HasChanged(IHasMetadata item, IDirectoryService directoryService)
         {
             return GetSupportedImages(item).Any(i => !item.HasImage(i));
         }

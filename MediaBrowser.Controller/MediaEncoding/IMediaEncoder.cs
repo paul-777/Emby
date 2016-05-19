@@ -4,13 +4,14 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using MediaBrowser.Model.Dlna;
 
 namespace MediaBrowser.Controller.MediaEncoding
 {
     /// <summary>
     /// Interface IMediaEncoder
     /// </summary>
-    public interface IMediaEncoder
+    public interface IMediaEncoder : ITranscoderSupport
     {
         /// <summary>
         /// Gets the encoder path.
@@ -50,6 +51,8 @@ namespace MediaBrowser.Controller.MediaEncoding
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>Task{Stream}.</returns>
         Task<Stream> ExtractVideoImage(string[] inputFiles, MediaProtocol protocol, Video3DFormat? threedFormat, TimeSpan? offset, CancellationToken cancellationToken);
+
+        Task<Stream> ExtractVideoImage(string[] inputFiles, MediaProtocol protocol, int? imageStreamIndex, CancellationToken cancellationToken);
 
         /// <summary>
         /// Extracts the video images on interval.

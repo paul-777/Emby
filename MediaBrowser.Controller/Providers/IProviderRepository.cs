@@ -1,6 +1,5 @@
 ﻿using MediaBrowser.Controller.Persistence;
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,11 +21,5 @@ namespace MediaBrowser.Controller.Providers
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>Task.</returns>
         Task SaveMetadataStatus(MetadataStatus status, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Initializes this instance.
-        /// </summary>
-        /// <returns>Task.</returns>
-        Task Initialize();
     }
 }

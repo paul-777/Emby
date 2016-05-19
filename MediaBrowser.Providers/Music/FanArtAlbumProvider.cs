@@ -1,5 +1,4 @@
-﻿using MediaBrowser.Common.IO;
-using MediaBrowser.Common.Net;
+﻿using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
@@ -13,16 +12,14 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Xml;
 using CommonIO;
 using MediaBrowser.Model.Serialization;
 
 namespace MediaBrowser.Providers.Music
 {
-    public class FanartAlbumProvider : IRemoteImageProvider, IHasChangeMonitor, IHasOrder
+    public class FanartAlbumProvider : IRemoteImageProvider, IHasItemChangeMonitor, IHasOrder
     {
         private readonly CultureInfo _usCulture = new CultureInfo("en-US");
         private readonly IServerConfigurationManager _config;
@@ -216,7 +213,7 @@ namespace MediaBrowser.Providers.Music
             });
         }
 
-        public bool HasChanged(IHasMetadata item, IDirectoryService directoryService, DateTime date)
+        public bool HasChanged(IHasMetadata item, IDirectoryService directoryService)
         {
             var options = FanartSeriesProvider.Current.GetFanartOptions();
             if (!options.EnableAutomaticUpdates)
@@ -238,7 +235,7 @@ namespace MediaBrowser.Providers.Music
 
                     var fileInfo = _fileSystem.GetFileInfo(artistJsonPath);
 
-                    return !fileInfo.Exists || _fileSystem.GetLastWriteTimeUtc(fileInfo) > date;
+                    return !fileInfo.Exists || _fileSystem.GetLastWriteTimeUtc(fileInfo) > item.DateLastRefreshed;
                 }
             }
 

@@ -1,12 +1,13 @@
-﻿(function () {
+﻿define(['jQuery'], function ($) {
 
     function deleteDevice(page, id) {
 
         var msg = Globalize.translate('DeleteDeviceConfirmation');
 
-        Dashboard.confirm(msg, Globalize.translate('HeaderDeleteDevice'), function (result) {
+        require(['confirm'], function (confirm) {
 
-            if (result) {
+            confirm(msg, Globalize.translate('HeaderDeleteDevice')).then(function () {
+
                 Dashboard.showLoadingMsg();
 
                 ApiClient.ajax({
@@ -19,7 +20,8 @@
 
                     loadData(page);
                 });
-            }
+            });
+
         });
     }
 
@@ -60,7 +62,8 @@
             deviceHtml += '</a>';
             deviceHtml += '</paper-item-body>';
 
-            deviceHtml += '<paper-icon-button icon="delete" data-id="' + d.Id + '" title="' + Globalize.translate('ButtonDelete') + '" class="btnDeleteDevice"></paper-icon-button>';
+            deviceHtml += '<button type="button" is="paper-icon-button-light" class="btnDeleteDevice" data-id="' + d.Id + '" title="' + Globalize.translate('ButtonDelete') + '"><iron-icon icon="delete"></iron-icon></button>';
+
             deviceHtml += '</paper-icon-item>';
 
             return deviceHtml;
@@ -104,4 +107,4 @@
 
     });
 
-})();
+});

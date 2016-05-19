@@ -10,7 +10,6 @@ using MediaBrowser.Model.MediaInfo;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -60,6 +59,14 @@ namespace MediaBrowser.MediaEncoding.Encoder
             state.ItemType = item.GetType().Name;
 
             state.IsInputVideo = string.Equals(item.MediaType, MediaType.Video, StringComparison.OrdinalIgnoreCase);
+
+            var primaryImage = item.GetImageInfo(ImageType.Primary, 0) ??
+                               item.Parents.Select(i => i.GetImageInfo(ImageType.Primary, 0)).FirstOrDefault(i => i != null);
+
+            if (primaryImage != null)
+            {
+                state.AlbumCoverPath = primaryImage.Path;
+            }
 
             var mediaSources = await _mediaSourceManager.GetPlayackMediaSources(request.ItemId, null, false, new[] { MediaType.Audio, MediaType.Video }, cancellationToken).ConfigureAwait(false);
 
@@ -576,6 +583,14 @@ namespace MediaBrowser.MediaEncoding.Encoder
                 return false;
             }
 
+            if (string.Equals("h264", videoStream.Codec, StringComparison.OrdinalIgnoreCase))
+            {
+                if (videoStream.IsAVC.HasValue && !videoStream.IsAVC.Value)
+                {
+                    return false;
+                }
+            }
+
             // If client is requesting a specific video profile, it must match the source
             if (!string.IsNullOrEmpty(request.Profile))
             {
@@ -660,14 +675,6 @@ namespace MediaBrowser.MediaEncoding.Encoder
                 }
 
                 if (videoStream.Level.Value > request.Level.Value)
-                {
-                    return false;
-                }
-            }
-
-            if (request.Cabac.HasValue && request.Cabac.Value)
-            {
-                if (videoStream.IsCabac.HasValue && !videoStream.IsCabac.Value)
                 {
                     return false;
                 }
@@ -774,7 +781,6 @@ namespace MediaBrowser.MediaEncoding.Encoder
                 state.TargetPacketLength,
                 state.TargetTimestamp,
                 state.IsTargetAnamorphic,
-                state.IsTargetCabac,
                 state.TargetRefFrames,
                 state.TargetVideoStreamCount,
                 state.TargetAudioStreamCount,
@@ -794,6 +800,8 @@ namespace MediaBrowser.MediaEncoding.Encoder
                 state.EstimateContentLength = transcodingProfile.EstimateContentLength;
                 state.EnableMpegtsM2TsMode = transcodingProfile.EnableMpegtsM2TsMode;
                 state.TranscodeSeekInfo = transcodingProfile.TranscodeSeekInfo;
+
+                state.Options.CopyTimestamps = transcodingProfile.CopyTimestamps;
             }
         }
     }

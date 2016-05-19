@@ -1,4 +1,4 @@
-﻿(function ($, document, window) {
+﻿define(['jQuery', 'datetime', 'paper-icon-button-light'], function ($, datetime) {
 
     var query = {
 
@@ -11,30 +11,29 @@
     function showStatusMessage(id) {
 
         var item = currentResult.Items.filter(function (i) {
-            return i.Id == id;
 
+            return i.Id == id;
         })[0];
 
         Dashboard.alert({
 
             title: getStatusText(item, false),
             message: item.StatusMessage
-
         });
     }
 
     function deleteOriginalFile(page, id) {
 
         var item = currentResult.Items.filter(function (i) {
-            return i.Id == id;
 
+            return i.Id == id;
         })[0];
 
-        var message = Globalize.translate('MessageFileWillBeDeleted') + '<p style="word-wrap:break-word;">' + item.OriginalPath + '</p><p>' + Globalize.translate('MessageSureYouWishToProceed') + '</p>';
+        var message = Globalize.translate('MessageFileWillBeDeleted') + '<br/><br/>' + item.OriginalPath + '<br/><br/>' + Globalize.translate('MessageSureYouWishToProceed');
 
-        Dashboard.confirm(message, Globalize.translate('HeaderDeleteFile'), function (confirmResult) {
+        require(['confirm'], function (confirm) {
 
-            if (confirmResult) {
+            confirm(message, Globalize.translate('HeaderDeleteFile')).then(function () {
 
                 Dashboard.showLoadingMsg();
 
@@ -45,17 +44,16 @@
                     reloadItems(page);
 
                 }, onApiFailure);
-            }
-
+            });
         });
     }
 
-    function organizeEpsiodeWithCorrections(page, item) {
+    function organizeFileWithCorrections(page, item) {
 
-        showEpisodeCorrectionPopup(page, item);
+        showCorrectionPopup(page, item);
     }
 
-    function showEpisodeCorrectionPopup(page, item) {
+    function showCorrectionPopup(page, item) {
 
         require(['components/fileorganizer/fileorganizer'], function (fileorganizer) {
 
@@ -68,32 +66,32 @@
     function organizeFile(page, id) {
 
         var item = currentResult.Items.filter(function (i) {
-            return i.Id == id;
 
+            return i.Id == id;
         })[0];
 
         if (!item.TargetPath) {
 
             if (item.Type == "Episode") {
-                organizeEpsiodeWithCorrections(page, item);
+                organizeFileWithCorrections(page, item);
             }
 
             return;
         }
 
-        var message = Globalize.translate('MessageFollowingFileWillBeMovedFrom') + '<p style="word-wrap:break-word;">' + item.OriginalPath + '</p><p>' + Globalize.translate('MessageDestinationTo') + '</p><p style="word-wrap:break-word;">' + item.TargetPath + '</p>';
+        var message = Globalize.translate('MessageFollowingFileWillBeMovedFrom') + '<br/><br/>' + item.OriginalPath + '<br/><br/>' + Globalize.translate('MessageDestinationTo') + '<br/><br/>' + item.TargetPath;
 
         if (item.DuplicatePaths.length) {
-            message += '<p><b>' + Globalize.translate('MessageDuplicatesWillBeDeleted') + '</b></p>';
+            message += '<br/><br/>' + Globalize.translate('MessageDuplicatesWillBeDeleted');
 
-            message += '<p style="word-wrap:break-word;">' + item.DuplicatePaths.join('<br/>') + '</p>';
+            message += '<br/><br/>' + item.DuplicatePaths.join('<br/>');
         }
 
-        message += '<p>' + Globalize.translate('MessageSureYouWishToProceed') + '</p>';
+        message += '<br/><br/>' + Globalize.translate('MessageSureYouWishToProceed');
 
-        Dashboard.confirm(message, Globalize.translate('HeaderOrganizeFile'), function (confirmResult) {
+        require(['confirm'], function (confirm) {
 
-            if (confirmResult) {
+            confirm(message, Globalize.translate('HeaderOrganizeFile')).then(function () {
 
                 Dashboard.showLoadingMsg();
 
@@ -104,7 +102,7 @@
                     reloadItems(page);
 
                 }, onApiFailure);
-            }
+            });
         });
     }
 
@@ -119,7 +117,6 @@
 
             Dashboard.hideLoadingMsg();
         }, onApiFailure);
-
     }
 
     function getStatusText(item, enhance) {
@@ -150,7 +147,6 @@
             }
         }
 
-
         return status;
     }
 
@@ -164,7 +160,7 @@
 
             html += '<td>';
 
-            var date = parseISO8601Date(item.Date, { toLocal: true });
+            var date = datetime.parseISO8601Date(item.Date, true);
             html += date.toLocaleDateString();
 
             html += '</td>';
@@ -194,10 +190,10 @@
 
             html += '<td class="organizerButtonCell">';
 
-
             if (item.Status != 'Success') {
-                html += '<paper-icon-button data-resultid="' + item.Id + '" icon="folder" class="btnProcessResult organizerButton" title="' + Globalize.translate('ButtonOrganizeFile') + '"></paper-icon-button>';
-                html += '<paper-icon-button data-resultid="' + item.Id + '" icon="delete" class="btnDeleteResult organizerButton" title="' + Globalize.translate('ButtonDeleteFile') + '"></paper-icon-button>';
+
+                html += '<button type="button" is="paper-icon-button-light" data-resultid="' + item.Id + '" class="btnProcessResult organizerButton" title="' + Globalize.translate('ButtonOrganizeFile') + '"><iron-icon icon="folder"></iron-icon></button>';
+                html += '<button type="button" is="paper-icon-button-light" data-resultid="' + item.Id + '" class="btnDeleteResult organizerButton" title="' + Globalize.translate('ButtonDeleteFile') + '"><iron-icon icon="delete"></iron-icon></button>';
             }
 
             html += '</td>';
@@ -207,7 +203,7 @@
             return html;
         }).join('');
 
-        var elem = $('.resultBody', page).html(rows).parents('.tblOrganizationResults').table("refresh").trigger('create');
+        var elem = $('.resultBody', page).html(rows).parents('.tblOrganizationResults').table('refresh').trigger('create');
 
         $('.btnShowStatusMessage', elem).on('click', function () {
 
@@ -241,17 +237,21 @@
         $(page)[0].querySelector('.listTopPaging').innerHTML = pagingHtml;
 
         if (result.TotalRecordCount > query.Limit && result.TotalRecordCount > 50) {
+
             $('.listBottomPaging', page).html(pagingHtml).trigger('create');
         } else {
+
             $('.listBottomPaging', page).empty();
         }
 
         $('.btnNextPage', page).on('click', function () {
+
             query.StartIndex += query.Limit;
             reloadItems(page);
         });
 
         $('.btnPreviousPage', page).on('click', function () {
+
             query.StartIndex -= query.Limit;
             reloadItems(page);
         });
@@ -277,21 +277,36 @@
 
         Dashboard.hideLoadingMsg();
 
-        var page = $.mobile.activePage;
-        $('.episodeCorrectionPopup', page).popup("close");
-
         if (e.status == 0) {
+
             Dashboard.alert({
                 title: 'Auto-Organize',
                 message: 'The operation is going to take a little longer. The view will be updated on completion.'
             });
         }
         else {
+
             Dashboard.alert({
                 title: Globalize.translate('AutoOrganizeError'),
-                message: Globalize.translate('ErrorOrganizingFileWithErrorCode', e.getResponseHeader("X-Application-Error-Code"))
+                message: Globalize.translate('ErrorOrganizingFileWithErrorCode', e.headers.get('X-Application-Error-Code'))
             });
         }
+    }
+
+    function getTabs() {
+        return [
+        {
+            href: 'autoorganizelog.html',
+            name: Globalize.translate('TabActivityLog')
+        },
+         {
+             href: 'autoorganizetv.html',
+             name: Globalize.translate('TabTV')
+         },
+         {
+             href: 'autoorganizesmart.html',
+             name: Globalize.translate('TabSmartMatches')
+         }];
     }
 
     $(document).on('pageinit', "#libraryFileOrganizerLogPage", function () {
@@ -303,10 +318,11 @@
             ApiClient.clearOrganizationLog().then(function () {
                 reloadItems(page);
             }, onApiFailure);
-
         });
 
-    }).on('pageshow', "#libraryFileOrganizerLogPage", function () {
+    }).on('pageshow', '#libraryFileOrganizerLogPage', function () {
+
+        LibraryMenu.setTabs('autoorganize', 0, getTabs);
 
         var page = this;
 
@@ -320,9 +336,9 @@
             taskKey: 'AutoOrganize'
         });
 
-        Events.on(ApiClient, "websocketmessage", onWebSocketMessage);
+        Events.on(ApiClient, 'websocketmessage', onWebSocketMessage);
 
-    }).on('pagebeforehide', "#libraryFileOrganizerLogPage", function () {
+    }).on('pagebeforehide', '#libraryFileOrganizerLogPage', function () {
 
         var page = this;
 
@@ -333,7 +349,7 @@
             mode: 'off'
         });
 
-        Events.off(ApiClient, "websocketmessage", onWebSocketMessage);
+        Events.off(ApiClient, 'websocketmessage', onWebSocketMessage);
     });
 
-})(jQuery, document, window);
+});

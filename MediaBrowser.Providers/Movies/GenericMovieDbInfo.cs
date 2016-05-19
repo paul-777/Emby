@@ -14,7 +14,6 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
-using MediaBrowser.Common.IO;
 
 namespace MediaBrowser.Providers.Movies
 {
@@ -179,7 +178,7 @@ namespace MediaBrowser.Providers.Movies
 
                 if (movieItem != null)
                 {
-                    movieItem.TmdbCollectionName = movieData.belongs_to_collection.name;
+                    movieItem.CollectionName = movieData.belongs_to_collection.name;
                 }
             }
 
@@ -250,7 +249,7 @@ namespace MediaBrowser.Providers.Movies
             }
 
             resultItem.ResetPeople();
-            var tmdbImageUrl = settings.images.base_url + "original";
+            var tmdbImageUrl = settings.images.secure_base_url + "original";
 
             //Actors, Directors, Writers - all in People
             //actors come from cast
@@ -330,7 +329,7 @@ namespace MediaBrowser.Providers.Movies
                 {
                     hasTrailers.RemoteTrailers = movieData.trailers.youtube.Select(i => new MediaUrl
                     {
-                        Url = string.Format("http://www.youtube.com/watch?v={0}", i.source),
+                        Url = string.Format("https://www.youtube.com/watch?v={0}", i.source),
                         Name = i.name,
                         VideoSize = string.Equals("hd", i.size, StringComparison.OrdinalIgnoreCase) ? VideoSize.HighDefinition : VideoSize.StandardDefinition
 

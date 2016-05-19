@@ -1,4 +1,4 @@
-﻿(function ($, document) {
+﻿define(['datetime', 'jQuery', 'paper-icon-button-light'], function (datetime, $) {
 
     var query = {
 
@@ -6,26 +6,27 @@
         SortOrder: "Ascending"
     };
 
-    function deleteSeriesTimer(page, id) {
+    function deleteSeriesTimer(context, id) {
 
-        Dashboard.confirm(Globalize.translate('MessageConfirmSeriesCancellation'), Globalize.translate('HeaderConfirmSeriesCancellation'), function (result) {
+        require(['confirm'], function (confirm) {
 
-            if (result) {
+            confirm(Globalize.translate('MessageConfirmSeriesCancellation'), Globalize.translate('HeaderConfirmSeriesCancellation')).then(function () {
 
                 Dashboard.showLoadingMsg();
 
                 ApiClient.cancelLiveTvSeriesTimer(id).then(function () {
 
-                    Dashboard.alert(Globalize.translate('MessageSeriesCancelled'));
+                    require(['toast'], function (toast) {
+                        toast(Globalize.translate('MessageSeriesCancelled'));
+                    });
 
-                    reload(page);
+                    reload(context);
                 });
-            }
-
+            });
         });
     }
 
-    function renderTimers(page, timers) {
+    function renderTimers(context, timers) {
 
         var html = '';
 
@@ -62,7 +63,7 @@
 
                 html += ' - ' + Globalize.translate('LabelAnytime');
             } else {
-                html += ' - ' + LibraryBrowser.getDisplayTime(timer.StartDate);
+                html += ' - ' + datetime.getDisplayTime(timer.StartDate);
             }
             html += '</div>';
 
@@ -78,7 +79,7 @@
 
             html += '</paper-item-body>';
 
-            html += '<paper-icon-button icon="cancel" data-seriestimerid="' + timer.Id + '" title="' + Globalize.translate('ButtonCancelSeries') + '" class="btnCancelSeries"></paper-icon-button>';
+            html += '<button type="button" is="paper-icon-button-light" data-seriestimerid="' + timer.Id + '" title="' + Globalize.translate('ButtonCancelSeries') + '" class="btnCancelSeries"><iron-icon icon="cancel"></iron-icon></button>';
 
             html += '</paper-icon-item>';
         }
@@ -87,36 +88,36 @@
             html += '</div>';
         }
 
-        var elem = $('#items', page).html(html);
+        var elem = $('#items', context).html(html);
 
         $('.btnCancelSeries', elem).on('click', function () {
 
-            deleteSeriesTimer(page, this.getAttribute('data-seriestimerid'));
+            deleteSeriesTimer(context, this.getAttribute('data-seriestimerid'));
 
         });
 
         Dashboard.hideLoadingMsg();
     }
 
-    function reload(page) {
+    function reload(context) {
 
         Dashboard.showLoadingMsg();
 
         ApiClient.getLiveTvSeriesTimers(query).then(function (result) {
 
             require(['paper-fab', 'paper-item-body', 'paper-icon-item'], function () {
-                renderTimers(page, result.Items);
+                renderTimers(context, result.Items);
             });
-
-            LibraryBrowser.setLastRefreshed(page);
         });
     }
 
-    window.LiveTvPage.renderSeriesTimersTab = function (page, tabContent) {
+    return function (view, params, tabContent) {
 
-        if (LibraryBrowser.needsRefresh(tabContent)) {
+        var self = this;
+        self.renderTab = function () {
+
             reload(tabContent);
-        }
+        };
     };
 
-})(jQuery, document);
+});

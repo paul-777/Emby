@@ -15,10 +15,9 @@ namespace MediaBrowser.Dlna.Profiles
 
             XDlnaDoc = "DMS-1.50";
 
-            FriendlyName = "Emby";
             Manufacturer = "Emby";
             ModelDescription = "Emby";
-            ModelName = "Emby";
+            ModelName = "Emby Server";
             ModelNumber = "Emby";
             ModelUrl = "http://emby.media/";
             ManufacturerUrl = "http://emby.media/";
@@ -31,10 +30,10 @@ namespace MediaBrowser.Dlna.Profiles
             MaxIconWidth = 48;
             MaxIconHeight = 48;
 
-            MaxStreamingBitrate = 10000000;
-            MaxStaticBitrate = 10000000;
-            MusicStreamingTranscodingBitrate = 128000;
-            MusicSyncBitrate = 128000;
+            MaxStreamingBitrate = 20000000;
+            MaxStaticBitrate = 20000000;
+            MusicStreamingTranscodingBitrate = 192000;
+            MusicSyncBitrate = 192000;
 
             EnableAlbumArtInDidl = false;
 

@@ -11,18 +11,19 @@
   "homepage": "https://github.com/MediaBrowser/emby-webcomponents",
   "dependencies": {
     "requirejs": "requirejs#^2.1.22",
-    "isMobile": "isMobile#^0.3.9"
+    "isMobile": "isMobile#^0.3.9",
+    "material-design-lite": "material-design-lite#^1.1.2"
   },
   "devDependencies": {},
   "ignore": [],
-  "version": "1.0.76",
-  "_release": "1.0.76",
+  "version": "1.3.40",
+  "_release": "1.3.40",
   "_resolution": {
     "type": "version",
-    "tag": "1.0.76",
-    "commit": "8b29590144a9a67065820c7c1a6a4f433f52d9bf"
+    "tag": "1.3.40",
+    "commit": "f5d6ceea8a3fccab8b2794df5aabb78309ca57a5"
   },
-  "_source": "git://github.com/MediaBrowser/emby-webcomponents.git",
-  "_target": "~1.0.0",
+  "_source": "https://github.com/MediaBrowser/emby-webcomponents.git",
+  "_target": "^1.2.0",
   "_originalSource": "emby-webcomponents"
 }

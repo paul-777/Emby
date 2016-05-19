@@ -9,13 +9,14 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Localization;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Session;
-using MediaBrowser.Dlna.Channels;
 using MediaBrowser.Dlna.PlayTo;
 using MediaBrowser.Dlna.Ssdp;
 using MediaBrowser.Model.Logging;
 using System;
 using System.Collections.Generic;
-using System.Net;
+using System.Linq;
+using MediaBrowser.Controller.MediaEncoding;
+using MediaBrowser.Dlna.Channels;
 
 namespace MediaBrowser.Dlna.Main
 {
@@ -36,11 +37,13 @@ namespace MediaBrowser.Dlna.Main
         private readonly IUserDataManager _userDataManager;
         private readonly ILocalizationManager _localization;
         private readonly IMediaSourceManager _mediaSourceManager;
+        private readonly IMediaEncoder _mediaEncoder;
 
         private readonly SsdpHandler _ssdpHandler;
         private readonly IDeviceDiscovery _deviceDiscovery;
 
         private readonly List<string> _registeredServerIds = new List<string>();
+        private bool _ssdpHandlerStarted;
         private bool _dlnaServerStarted;
 
         public DlnaEntryPoint(IServerConfigurationManager config,
@@ -56,7 +59,7 @@ namespace MediaBrowser.Dlna.Main
             IUserDataManager userDataManager,
             ILocalizationManager localization,
             IMediaSourceManager mediaSourceManager,
-            ISsdpHandler ssdpHandler, IDeviceDiscovery deviceDiscovery)
+            ISsdpHandler ssdpHandler, IDeviceDiscovery deviceDiscovery, IMediaEncoder mediaEncoder)
         {
             _config = config;
             _appHost = appHost;
@@ -71,16 +74,27 @@ namespace MediaBrowser.Dlna.Main
             _localization = localization;
             _mediaSourceManager = mediaSourceManager;
             _deviceDiscovery = deviceDiscovery;
+            _mediaEncoder = mediaEncoder;
             _ssdpHandler = (SsdpHandler)ssdpHandler;
             _logger = logManager.GetLogger("Dlna");
         }
 
         public void Run()
         {
-            StartSsdpHandler();
             ReloadComponents();
 
+            _config.ConfigurationUpdated += _config_ConfigurationUpdated;
             _config.NamedConfigurationUpdated += _config_NamedConfigurationUpdated;
+        }
+
+        private bool _lastEnableUpnP;
+        void _config_ConfigurationUpdated(object sender, EventArgs e)
+        {
+            if (_lastEnableUpnP != _config.Configuration.EnableUPnP)
+            {
+                ReloadComponents();
+            }
+            _lastEnableUpnP = _config.Configuration.EnableUPnP;
         }
 
         void _config_NamedConfigurationUpdated(object sender, ConfigurationUpdateEventArgs e)
@@ -93,9 +107,26 @@ namespace MediaBrowser.Dlna.Main
 
         private void ReloadComponents()
         {
-            var isServerStarted = _dlnaServerStarted;
-
             var options = _config.GetDlnaConfiguration();
+
+            if (!options.EnableServer && !options.EnablePlayTo && !_config.Configuration.EnableUPnP)
+            {
+                if (_ssdpHandlerStarted)
+                {
+                    // Sat/ip live tv depends on device discovery, as well as hd homerun detection
+                    // In order to allow this to be disabled, we need a modular way of knowing if there are 
+                    // any parts of the system that are dependant on it
+                    // DisposeSsdpHandler();
+                }
+                return;
+            }
+
+            if (!_ssdpHandlerStarted)
+            {
+                StartSsdpHandler();
+            }
+
+            var isServerStarted = _dlnaServerStarted;
 
             if (options.EnableServer && !isServerStarted)
             {
@@ -123,12 +154,57 @@ namespace MediaBrowser.Dlna.Main
             try
             {
                 _ssdpHandler.Start();
+                _ssdpHandlerStarted = true;
 
-                ((DeviceDiscovery)_deviceDiscovery).Start(_ssdpHandler);
+                StartDeviceDiscovery();
             }
             catch (Exception ex)
             {
                 _logger.ErrorException("Error starting ssdp handlers", ex);
+            }
+        }
+
+        private void StartDeviceDiscovery()
+        {
+            try
+            {
+                ((DeviceDiscovery)_deviceDiscovery).Start(_ssdpHandler);
+
+                //DlnaChannel.Current.Start(() => _registeredServerIds.ToList());
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("Error starting device discovery", ex);
+            }
+        }
+
+        private void DisposeDeviceDiscovery()
+        {
+            try
+            {
+                ((DeviceDiscovery)_deviceDiscovery).Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("Error stopping device discovery", ex);
+            }
+        }
+
+        private void DisposeSsdpHandler()
+        {
+            DisposeDeviceDiscovery();
+
+            try
+            {
+                ((DeviceDiscovery)_deviceDiscovery).Dispose();
+
+                _ssdpHandler.Dispose();
+
+                _ssdpHandlerStarted = false;
+            }
+            catch (Exception ex)
+            {
+                _logger.ErrorException("Error stopping ssdp handlers", ex);
             }
         }
 
@@ -157,11 +233,11 @@ namespace MediaBrowser.Dlna.Main
                 //}
 
                 var addressString = address.ToString();
-                var guid = addressString.GetMD5();
+                var udn = addressString.GetMD5().ToString("N");
 
-                var descriptorURI = "/dlna/" + guid.ToString("N") + "/description.xml";
+                var descriptorURI = "/dlna/" + udn + "/description.xml";
 
-                var uri = new Uri(_appHost.GetLocalApiUrl(addressString) + descriptorURI);
+                var uri = new Uri(_appHost.GetLocalApiUrl(address) + descriptorURI);
 
                 var services = new List<string>
                 {
@@ -170,12 +246,12 @@ namespace MediaBrowser.Dlna.Main
                     "urn:schemas-upnp-org:service:ContentDirectory:1", 
                     "urn:schemas-upnp-org:service:ConnectionManager:1",
                     "urn:microsoft.com:service:X_MS_MediaReceiverRegistrar:1",
-                    "uuid:" + guid.ToString("N")
+                    "uuid:" + udn
                 };
 
-                _ssdpHandler.RegisterNotification(guid, uri, address, services);
+                _ssdpHandler.RegisterNotification(udn, uri, address, services);
 
-                _registeredServerIds.Add(guid.ToString("N"));
+                _registeredServerIds.Add(udn);
             }
         }
 
@@ -198,7 +274,8 @@ namespace MediaBrowser.Dlna.Main
                         _config,
                         _userDataManager,
                         _localization,
-                        _mediaSourceManager);
+                        _mediaSourceManager,
+                        _mediaEncoder);
 
                     _manager.Start();
                 }
@@ -232,6 +309,7 @@ namespace MediaBrowser.Dlna.Main
         {
             DisposeDlnaServer();
             DisposePlayToManager();
+            DisposeSsdpHandler();
         }
 
         public void DisposeDlnaServer()
@@ -240,7 +318,7 @@ namespace MediaBrowser.Dlna.Main
             {
                 try
                 {
-                    _ssdpHandler.UnregisterNotification(new Guid(id));
+                    _ssdpHandler.UnregisterNotification(id);
                 }
                 catch (Exception ex)
                 {

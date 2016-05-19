@@ -111,8 +111,9 @@ header {
       <button type="button" class="btn btn-sm btn-info" onclick="$('#video')[0].currentTime=$('#seek_pos').val()">seek to </button>
        <input type="text" id='seek_pos' size="8" onkeydown="if(window.event.keyCode=='13'){$('#video')[0].currentTime=$('#seek_pos').val();}"><br><br>
       <button type="button" class="btn btn-xs btn-warning" onclick="hls.attachMedia($('#video')[0])">attach Video</button>
-      <button type="button" class="btn btn-xs btn-warning" onclick="hls.detachVideo()">detach Video</button><br>
-      <button type="button" class="btn btn-xs btn-warning" onclick="hls.startLoad()">recover Network Error</button>
+      <button type="button" class="btn btn-xs btn-warning" onclick="hls.detachMedia()">detach Video</button><br>
+      <button type="button" class="btn btn-xs btn-warning" onclick="hls.startLoad()">start Load</button>
+      <button type="button" class="btn btn-xs btn-warning" onclick="hls.stopLoad()">stop Load</button>
       <button type="button" class="btn btn-xs btn-warning" onclick="hls.recoverMediaError()">recover Media Error</button><br>
     </div>
 
@@ -213,7 +214,7 @@ $(document).ready(function() {
    $('#autoRecoverError').prop( "checked", autoRecoverError );
    $('#enableWorker').prop( "checked", enableWorker );
    $('#levelCapping').val(levelCapping);
-   $('#defaultAudioCodec').val(defaultAudioCodec);
+   $('#defaultAudioCodec').val(defaultAudioCodec || "undefined");
 });
 
 
@@ -906,10 +907,21 @@ function timeRangesToString(r) {
     if(v.videoWidth) {
       $("#currentResolution").html("video resolution:" + v.videoWidth + 'x' + v.videoHeight);
     }
-    $("#currentLevelControl").html(html1);
-    $("#loadLevelControl").html(html2);
-    $("#levelCappingControl").html(html3);
-    $("#nextLevelControl").html(html4);
+    if($("#currentLevelControl").html() != html1) {
+      $("#currentLevelControl").html(html1);
+    }
+
+    if($("#loadLevelControl").html() != html2) {
+      $("#loadLevelControl").html(html2);
+    }
+
+    if($("#levelCappingControl").html() != html3) {
+      $("#levelCappingControl").html(html3);
+    }
+
+    if($("#nextLevelControl").html() != html4) {
+      $("#nextLevelControl").html(html4);
+    }
   }
 
   function level2label(index) {
@@ -937,7 +949,7 @@ function timeRangesToString(r) {
     for (var i = 0; i < sURLVariables.length; i++) {
       var sParameterName = sURLVariables[i].split('=');
       if (sParameterName[0] == sParam) {
-        return sParameterName[1];
+        return "undefined" == sParameterName[1] ? undefined : sParameterName[1];
       }
     }
     return defaultValue;

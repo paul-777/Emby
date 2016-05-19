@@ -624,6 +624,7 @@ namespace MediaBrowser.Api.Images
                 PercentPlayed = request.PercentPlayed ?? 0,
                 UnplayedCount = request.UnplayedCount,
                 BackgroundColor = request.BackgroundColor,
+                ForegroundLayer = request.ForegroundLayer,
                 SupportedOutputFormats = supportedFormats
             };
 
@@ -698,6 +699,7 @@ namespace MediaBrowser.Api.Images
 
         private ImageFormat[] GetClientSupportedFormats()
         {
+            //Logger.Debug("Request types: {0}", string.Join(",", Request.AcceptTypes ?? new string[] { }));
             var supportsWebP = (Request.AcceptTypes ?? new string[] { }).Contains("image/webp", StringComparer.OrdinalIgnoreCase);
 
             var userAgent = Request.UserAgent ?? string.Empty;

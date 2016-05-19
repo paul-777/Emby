@@ -14,12 +14,6 @@ namespace MediaBrowser.Controller.Persistence
     public interface IItemRepository : IRepository
     {
         /// <summary>
-        /// Opens the connection to the repository
-        /// </summary>
-        /// <returns>Task.</returns>
-        Task Initialize();
-
-        /// <summary>
         /// Saves an item
         /// </summary>
         /// <param name="item">The item.</param>
@@ -41,13 +35,6 @@ namespace MediaBrowser.Controller.Persistence
         /// <param name="itemId">The item id.</param>
         /// <returns>Task{IEnumerable{ItemReview}}.</returns>
         IEnumerable<ItemReview> GetCriticReviews(Guid itemId);
-
-        /// <summary>
-        /// Gets the children items.
-        /// </summary>
-        /// <param name="parentId">The parent identifier.</param>
-        /// <returns>IEnumerable&lt;BaseItem&gt;.</returns>
-        IEnumerable<BaseItem> GetChildrenItems(Guid parentId);
 
         /// <summary>
         /// Saves the critic reviews.
@@ -95,22 +82,6 @@ namespace MediaBrowser.Controller.Persistence
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>Task.</returns>
         Task SaveChapters(Guid id, IEnumerable<ChapterInfo> chapters, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Gets the children.
-        /// </summary>
-        /// <param name="parentId">The parent id.</param>
-        /// <returns>IEnumerable{ChildDefinition}.</returns>
-        IEnumerable<Guid> GetChildren(Guid parentId);
-
-        /// <summary>
-        /// Saves the children.
-        /// </summary>
-        /// <param name="parentId">The parent id.</param>
-        /// <param name="children">The children.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>Task.</returns>
-        Task SaveChildren(Guid parentId, IEnumerable<Guid> children, CancellationToken cancellationToken);
 
         /// <summary>
         /// Gets the media streams.

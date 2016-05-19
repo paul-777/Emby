@@ -1,4 +1,4 @@
-﻿(function ($, document) {
+﻿define(['libraryBrowser', 'jQuery'], function (libraryBrowser) {
 
     var defaultFirstSection = 'smalllibrarytiles';
 
@@ -132,34 +132,43 @@
     var homePageDismissValue = '14';
     var homePageTourKey = 'homePageTour';
 
+    function displayPreferencesKey() {
+        if (AppInfo.isNativeApp) {
+            return 'Emby Mobile';
+        }
+
+        return 'webclient';
+    }
+
     function dismissWelcome(page, userId) {
 
         getDisplayPreferences('home', userId).then(function (result) {
 
             result.CustomPrefs[homePageTourKey] = homePageDismissValue;
-            ApiClient.updateDisplayPreferences('home', result, userId, AppSettings.displayPreferencesKey());
+            ApiClient.updateDisplayPreferences('home', result, userId, displayPreferencesKey());
         });
     }
 
     function showWelcomeIfNeeded(page, displayPreferences) {
 
         if (displayPreferences.CustomPrefs[homePageTourKey] == homePageDismissValue) {
-            $('.welcomeMessage', page).hide();
+            page.querySelector('.welcomeMessage').classList.add('hide');
         } else {
 
             Dashboard.hideLoadingMsg();
 
-            var elem = $('.welcomeMessage', page).show();
+            var elem = page.querySelector('.welcomeMessage');
+            elem.classList.remove('hide');
 
             if (displayPreferences.CustomPrefs[homePageTourKey]) {
 
-                $('.tourHeader', elem).html(Globalize.translate('HeaderWelcomeBack'));
-                $('.tourButtonText', elem).html(Globalize.translate('ButtonTakeTheTourToSeeWhatsNew'));
+                elem.querySelector('.tourHeader').innerHTML = Globalize.translate('HeaderWelcomeBack');
+                elem.querySelector('.tourButtonText').innerHTML = Globalize.translate('ButtonTakeTheTourToSeeWhatsNew');
 
             } else {
 
-                $('.tourHeader', elem).html(Globalize.translate('HeaderWelcomeToProjectWebClient'));
-                $('.tourButtonText', elem).html(Globalize.translate('ButtonTakeTheTour'));
+                elem.querySelector('.tourHeader').innerHTML = Globalize.translate('HeaderWelcomeToProjectWebClient');
+                elem.querySelector('.tourButtonText').innerHTML = Globalize.translate('ButtonTakeTheTour');
             }
         }
     }
@@ -197,130 +206,134 @@
                 newSlideShow.show();
 
                 dismissWelcome(page, userId);
-                $('.welcomeMessage', page).hide();
+                page.querySelector('.welcomeMessage').classList.add('hide');
             });
         });
     }
 
     function loadHomeTab(page, tabContent) {
 
-        if (LibraryBrowser.needsRefresh(tabContent)) {
-            if (window.ApiClient) {
-                var userId = Dashboard.getCurrentUserId();
+        if (window.ApiClient) {
+            var userId = Dashboard.getCurrentUserId();
+            Dashboard.showLoadingMsg();
 
-                Dashboard.showLoadingMsg();
+            getDisplayPreferences('home', userId).then(function (result) {
 
-                getDisplayPreferences('home', userId).then(function (result) {
+                Dashboard.getCurrentUser().then(function (user) {
 
-                    Dashboard.getCurrentUser().then(function (user) {
+                    loadSections(tabContent, user, result).then(function () {
 
-                        loadSections(tabContent, user, result).then(function () {
-
-                            if (!AppInfo.isNativeApp) {
-                                showWelcomeIfNeeded(page, result);
-                            }
-                            Dashboard.hideLoadingMsg();
-
-                            LibraryBrowser.setLastRefreshed(tabContent);
-                        });
-
+                        if (!AppInfo.isNativeApp) {
+                            showWelcomeIfNeeded(page, result);
+                        }
+                        Dashboard.hideLoadingMsg();
                     });
+
                 });
-            }
-        }
-    }
-
-    function loadTab(page, index) {
-
-        var tabContent = page.querySelector('.pageTabContent[data-index=\'' + index + '\']');
-        var depends = [];
-        var scope = 'HomePage';
-        var method = '';
-
-        switch (index) {
-
-            case 0:
-                depends.push('scripts/sections');
-                method = 'renderHomeTab';
-                break;
-            case 1:
-                depends.push('scripts/homenextup');
-                method = 'renderNextUp';
-                break;
-            case 2:
-                depends.push('scripts/favorites');
-                method = 'renderFavorites';
-                break;
-            case 3:
-                depends.push('scripts/homeupcoming');
-                method = 'renderUpcoming';
-                break;
-            default:
-                break;
-        }
-
-        require(depends, function () {
-
-            window[scope][method](page, tabContent);
-
-        });
-    }
-
-    pageIdOn('pageinit', "indexPage", function () {
-
-        var page = this;
-
-        var tabs = page.querySelector('paper-tabs');
-        var pages = page.querySelector('neon-animated-pages');
-
-        LibraryBrowser.configurePaperLibraryTabs(page, tabs, pages, 'index.html');
-
-        pages.addEventListener('tabchange', function (e) {
-            loadTab(page, parseInt(e.target.selected));
-        });
-
-        page.querySelector('.btnTakeTour').addEventListener('click', function () {
-            takeTour(page, Dashboard.getCurrentUserId());
-        });
-
-        if (AppInfo.enableHomeTabs) {
-            page.classList.remove('noSecondaryNavPage');
-            page.querySelector('.libraryViewNav').classList.remove('hide');
-        } else {
-            page.classList.add('noSecondaryNavPage');
-            page.querySelector('.libraryViewNav').classList.add('hide');
-        }
-    });
-
-    pageIdOn('pageshow', "indexPage", function () {
-
-        var page = this;
-        Events.on(MediaController, 'playbackstop', onPlaybackStop);
-    });
-
-    pageIdOn('pagebeforehide', "indexPage", function () {
-
-        var page = this;
-        Events.off(MediaController, 'playbackstop', onPlaybackStop);
-    });
-
-    function onPlaybackStop(e, state) {
-
-        if (state.NowPlayingItem && state.NowPlayingItem.MediaType == 'Video') {
-            var page = $($.mobile.activePage)[0];
-            var pages = page.querySelector('neon-animated-pages');
-
-            pages.dispatchEvent(new CustomEvent("tabchange", {}));
+            });
         }
     }
 
     function getDisplayPreferences(key, userId) {
 
-        return ApiClient.getDisplayPreferences(key, userId, AppSettings.displayPreferencesKey());
+        return ApiClient.getDisplayPreferences(key, userId, displayPreferencesKey());
     }
 
-    window.HomePage = {
-        renderHomeTab: loadHomeTab
-    };
+    return function (view, params) {
 
-})(jQuery, document);
+        var self = this;
+
+        self.renderTab = function () {
+            var tabContent = view.querySelector('.pageTabContent[data-index=\'' + 0 + '\']');
+            loadHomeTab(view, tabContent);
+        };
+
+        var mdlTabs = view.querySelector('.libraryViewNav');
+
+        libraryBrowser.configurePaperLibraryTabs(view, mdlTabs, view.querySelectorAll('.pageTabContent'), [0,1,2,3]);
+
+        var tabControllers = [];
+        var renderedTabs = [];
+
+        function loadTab(page, index) {
+
+            var tabContent = view.querySelector('.pageTabContent[data-index=\'' + index + '\']');
+            var depends = [];
+
+            switch (index) {
+
+                case 0:
+                    depends.push('scripts/sections');
+                    break;
+                case 1:
+                    depends.push('scripts/homenextup');
+                    break;
+                case 2:
+                    depends.push('scripts/homefavorites');
+                    break;
+                case 3:
+                    depends.push('scripts/homeupcoming');
+                    break;
+                default:
+                    return;
+            }
+
+            require(depends, function (controllerFactory) {
+
+                if (index == 0) {
+                    self.tabContent = tabContent;
+                }
+                var controller = tabControllers[index];
+                if (!controller) {
+                    controller = index ? new controllerFactory(view, params, tabContent) : self;
+                    tabControllers[index] = controller;
+
+                    if (controller.initTab) {
+                        controller.initTab();
+                    }
+                }
+
+                if (renderedTabs.indexOf(index) == -1) {
+                    renderedTabs.push(index);
+                    controller.renderTab();
+                }
+            });
+        }
+
+        mdlTabs.addEventListener('tabchange', function (e) {
+            loadTab(view, parseInt(e.detail.selectedTabIndex));
+        });
+
+        view.querySelector('.btnTakeTour').addEventListener('click', function () {
+            takeTour(view, Dashboard.getCurrentUserId());
+        });
+
+        if (AppInfo.enableHomeTabs) {
+            view.classList.remove('noSecondaryNavPage');
+            view.querySelector('.libraryViewNav').classList.remove('hide');
+        } else {
+            view.classList.add('noSecondaryNavPage');
+            view.querySelector('.libraryViewNav').classList.add('hide');
+        }
+
+        function onPlaybackStop(e, state) {
+
+            if (state.NowPlayingItem && state.NowPlayingItem.MediaType == 'Video') {
+
+                mdlTabs.dispatchEvent(new CustomEvent("tabchange", {
+                    detail: {
+                        selectedTabIndex: libraryBrowser.selectedTab(mdlTabs)
+                    }
+                }));
+            }
+        }
+
+        view.addEventListener('viewshow', function (e) {
+            Events.on(MediaController, 'playbackstop', onPlaybackStop);
+        });
+
+        view.addEventListener('viewbeforehide', function (e) {
+            Events.off(MediaController, 'playbackstop', onPlaybackStop);
+        });
+    };
+});

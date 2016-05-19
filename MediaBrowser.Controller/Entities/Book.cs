@@ -1,14 +1,14 @@
 ﻿using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Configuration;
-using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Serialization;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Users;
 
 namespace MediaBrowser.Controller.Entities
 {
     public class Book : BaseItem, IHasTags, IHasLookupInfo<BookInfo>, IHasSeries
     {
+        [IgnoreDataMember]
         public override string MediaType
         {
             get

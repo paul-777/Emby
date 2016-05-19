@@ -1,4 +1,4 @@
-﻿(function ($, document) {
+﻿define(['jQuery', 'libraryBrowser', 'scrollStyles'], function ($, libraryBrowser) {
 
     function getView() {
 
@@ -33,7 +33,8 @@
             Fields: "PrimaryImageAspectRatio,MediaSourceCount,SyncInfo",
             ParentId: parentId,
             ImageTypeLimit: 1,
-            EnableImageTypes: "Primary,Backdrop,Banner,Thumb"
+            EnableImageTypes: "Primary,Backdrop,Banner,Thumb",
+            EnableTotalRecordCount: false
         };
 
         ApiClient.getJSON(ApiClient.getUrl('Users/' + userId + '/Items/Latest', options)).then(function (items) {
@@ -43,7 +44,7 @@
 
             if (view == 'PosterCard') {
 
-                html += LibraryBrowser.getPosterViewHtml({
+                html += libraryBrowser.getPosterViewHtml({
                     items: items,
                     lazy: true,
                     shape: getPortraitShape(),
@@ -57,7 +58,7 @@
 
             } else if (view == 'Poster') {
 
-                html += LibraryBrowser.getPosterViewHtml({
+                html += libraryBrowser.getPosterViewHtml({
                     items: items,
                     shape: getPortraitShape(),
                     centerText: true,
@@ -71,7 +72,6 @@
             var recentlyAddedItems = page.querySelector('#recentlyAddedItems');
             recentlyAddedItems.innerHTML = html;
             ImageLoader.lazyChildren(recentlyAddedItems);
-            LibraryBrowser.setLastRefreshed(page);
         });
     }
 
@@ -91,7 +91,8 @@
             CollapseBoxSetItems: false,
             ParentId: parentId,
             ImageTypeLimit: 1,
-            EnableImageTypes: "Primary,Backdrop,Banner,Thumb"
+            EnableImageTypes: "Primary,Backdrop,Banner,Thumb",
+            EnableTotalRecordCount: false
         };
 
         ApiClient.getItems(userId, options).then(function (result) {
@@ -107,7 +108,7 @@
 
             if (view == 'ThumbCard') {
 
-                html += LibraryBrowser.getPosterViewHtml({
+                html += libraryBrowser.getPosterViewHtml({
                     items: result.Items,
                     preferThumb: true,
                     shape: getThumbShape(),
@@ -121,7 +122,7 @@
 
             } else if (view == 'Thumb') {
 
-                html += LibraryBrowser.getPosterViewHtml({
+                html += libraryBrowser.getPosterViewHtml({
                     items: result.Items,
                     preferThumb: true,
                     shape: getThumbShape(),
@@ -177,7 +178,7 @@
 
         if (view == 'PosterCard') {
 
-            html += LibraryBrowser.getPosterViewHtml({
+            html += libraryBrowser.getPosterViewHtml({
                 items: recommendation.Items,
                 lazy: true,
                 shape: getPortraitShape(),
@@ -191,7 +192,7 @@
 
         } else if (view == 'Poster') {
 
-            html += LibraryBrowser.getPosterViewHtml({
+            html += libraryBrowser.getPosterViewHtml({
                 items: recommendation.Items,
                 shape: getPortraitShape(),
                 centerText: true,
@@ -251,144 +252,144 @@
         $(containers).createCardMenus();
     }
 
-    function loadSuggestionsTab(page, tabContent) {
+    function loadSuggestionsTab(view, params, tabContent) {
 
-        var parentId = LibraryMenu.getTopParentId();
+        var parentId = params.topParentId;
 
         var userId = Dashboard.getCurrentUserId();
 
-        if (LibraryBrowser.needsRefresh(tabContent)) {
-            console.log('loadSuggestionsTab');
-            loadResume(tabContent, userId, parentId);
-            loadLatest(tabContent, userId, parentId);
+        console.log('loadSuggestionsTab');
+        loadResume(tabContent, userId, parentId);
+        loadLatest(tabContent, userId, parentId);
 
-            if (AppInfo.enableMovieHomeSuggestions) {
-                loadSuggestions(tabContent, userId, parentId);
-            }
+        if (AppInfo.enableMovieHomeSuggestions) {
+            loadSuggestions(tabContent, userId, parentId);
         }
     }
 
-    function loadTab(page, index) {
+    return function (view, params) {
 
-        var tabContent = page.querySelector('.pageTabContent[data-index=\'' + index + '\']');
-        var depends = [];
-        var scope = 'MoviesPage';
-        var renderMethod = '';
-        var initMethod = '';
+        var self = this;
 
-        switch (index) {
+        self.initTab = function () {
+            var tabContent = view.querySelector('.pageTabContent[data-index=\'' + 0 + '\']');
+            initSuggestedTab(view, tabContent);
+        };
 
-            case 0:
-                initMethod = 'initSuggestedTab';
-                renderMethod = 'renderSuggestedTab';
-                break;
-            case 1:
-                depends.push('scripts/movies');
-                depends.push('scripts/queryfilters');
-                renderMethod = 'renderMoviesTab';
-                initMethod = 'initMoviesTab';
-                break;
-            case 2:
-                depends.push('scripts/movietrailers');
-                renderMethod = 'renderTrailerTab';
-                initMethod = 'initTrailerTab';
-                break;
-            case 3:
-                depends.push('scripts/moviecollections');
-                renderMethod = 'renderCollectionsTab';
-                initMethod = 'initCollectionsTab';
-                break;
-            case 4:
-                depends.push('scripts/moviegenres');
-                renderMethod = 'renderGenresTab';
-                break;
-            case 5:
-                depends.push('scripts/moviestudios');
-                renderMethod = 'renderStudiosTab';
-                break;
-            default:
-                break;
-        }
+        self.renderTab = function () {
+            var tabContent = view.querySelector('.pageTabContent[data-index=\'' + 0 + '\']');
+            loadSuggestionsTab(view, params, tabContent);
+        };
 
-        require(depends, function () {
+        $('.recommendations', view).createCardMenus();
 
-            if (initMethod && !tabContent.initComplete) {
+        var mdlTabs = view.querySelector('.libraryViewNav');
 
-                window[scope][initMethod](page, tabContent);
-                tabContent.initComplete = true;
+        function onPlaybackStop(e, state) {
+
+            if (state.NowPlayingItem && state.NowPlayingItem.MediaType == 'Video') {
+
+                mdlTabs.dispatchEvent(new CustomEvent("tabchange", {
+                    detail: {
+                        selectedTabIndex: libraryBrowser.selectedTab(mdlTabs)
+                    }
+                }));
             }
-
-            window[scope][renderMethod](page, tabContent);
-
-        });
-    }
-
-    window.MoviesPage = window.MoviesPage || {};
-    window.MoviesPage.renderSuggestedTab = loadSuggestionsTab;
-    window.MoviesPage.initSuggestedTab = initSuggestedTab;
-
-    pageIdOn('pageinit', "moviesPage", function () {
-
-        var page = this;
-
-        $('.recommendations', page).createCardMenus();
-
-        var tabs = page.querySelector('paper-tabs');
-        var pages = page.querySelector('neon-animated-pages');
+        }
 
         var baseUrl = 'movies.html';
-        var topParentId = LibraryMenu.getTopParentId();
+        var topParentId = params.topParentId;
         if (topParentId) {
             baseUrl += '?topParentId=' + topParentId;
         }
 
-        LibraryBrowser.configurePaperLibraryTabs(page, tabs, pages, baseUrl);
+        libraryBrowser.configurePaperLibraryTabs(view, mdlTabs, view.querySelectorAll('.pageTabContent'), [0, 4, 5]);
 
-        pages.addEventListener('tabchange', function (e) {
-            loadTab(page, parseInt(e.target.selected));
-        });
-    });
+        var tabControllers = [];
+        var renderedTabs = [];
 
-    pageIdOn('pagebeforeshow', "moviesPage", function () {
+        function loadTab(page, index) {
 
-        var page = this;
+            var tabContent = view.querySelector('.pageTabContent[data-index=\'' + index + '\']');
+            var depends = [];
 
-        if (!page.getAttribute('data-title')) {
+            switch (index) {
 
-            var parentId = LibraryMenu.getTopParentId();
-
-            if (parentId) {
-
-                ApiClient.getItem(Dashboard.getCurrentUserId(), parentId).then(function (item) {
-
-                    page.setAttribute('data-title', item.Name);
-                    LibraryMenu.setTitle(item.Name);
-                });
-
-
-            } else {
-                page.setAttribute('data-title', Globalize.translate('TabMovies'));
-                LibraryMenu.setTitle(Globalize.translate('TabMovies'));
+                case 0:
+                    break;
+                case 1:
+                    depends.push('scripts/movies');
+                    break;
+                case 2:
+                    depends.push('scripts/movietrailers');
+                    break;
+                case 3:
+                    depends.push('scripts/moviecollections');
+                    break;
+                case 4:
+                    depends.push('scripts/moviegenres');
+                    break;
+                case 5:
+                    depends.push('scripts/moviestudios');
+                    break;
+                default:
+                    break;
             }
+
+            require(depends, function (controllerFactory) {
+
+                if (index == 0) {
+                    self.tabContent = tabContent;
+                }
+                var controller = tabControllers[index];
+                if (!controller) {
+                    controller = index ? new controllerFactory(view, params, tabContent) : self;
+                    tabControllers[index] = controller;
+
+                    if (controller.initTab) {
+                        controller.initTab();
+                    }
+                }
+
+                if (renderedTabs.indexOf(index) == -1) {
+                    renderedTabs.push(index);
+                    controller.renderTab();
+                }
+            });
         }
 
-        Events.on(MediaController, 'playbackstop', onPlaybackStop);
-    });
+        mdlTabs.addEventListener('tabchange', function (e) {
+            loadTab(view, parseInt(e.detail.selectedTabIndex));
+        });
 
-    pageIdOn('pagebeforehide', "moviesPage", function () {
+        view.addEventListener('viewbeforeshow', function (e) {
+            if (!view.getAttribute('data-title')) {
 
-        var page = this;
-        Events.off(MediaController, 'playbackstop', onPlaybackStop);
-    });
+                var parentId = params.topParentId;
 
-    function onPlaybackStop(e, state) {
+                if (parentId) {
 
-        if (state.NowPlayingItem && state.NowPlayingItem.MediaType == 'Video') {
-            var page = $($.mobile.activePage)[0];
-            var pages = page.querySelector('neon-animated-pages');
+                    ApiClient.getItem(Dashboard.getCurrentUserId(), parentId).then(function (item) {
 
-            pages.dispatchEvent(new CustomEvent("tabchange", {}));
-        }
-    }
+                        view.setAttribute('data-title', item.Name);
+                        LibraryMenu.setTitle(item.Name);
+                    });
 
-})(jQuery, document);
+
+                } else {
+                    view.setAttribute('data-title', Globalize.translate('TabMovies'));
+                    LibraryMenu.setTitle(Globalize.translate('TabMovies'));
+                }
+            }
+        });
+
+        view.addEventListener('viewshow', function (e) {
+            Events.on(MediaController, 'playbackstop', onPlaybackStop);
+        });
+
+        view.addEventListener('viewbeforehide', function (e) {
+            Events.off(MediaController, 'playbackstop', onPlaybackStop);
+        });
+    };
+
+});

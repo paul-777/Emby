@@ -55,13 +55,13 @@ namespace MediaBrowser.Providers.BoxSets
             {
                 var language = item.GetPreferredMetadataLanguage();
 
-                var mainResult = await MovieDbBoxSetProvider.Current.GetMovieDbResult(tmdbId, language, cancellationToken).ConfigureAwait(false);
+                var mainResult = await MovieDbBoxSetProvider.Current.GetMovieDbResult(tmdbId, null, cancellationToken).ConfigureAwait(false);
 
                 if (mainResult != null)
                 {
                     var tmdbSettings = await MovieDbProvider.Current.GetTmdbSettings(cancellationToken).ConfigureAwait(false);
 
-                    var tmdbImageUrl = tmdbSettings.images.base_url + "original";
+                    var tmdbImageUrl = tmdbSettings.images.secure_base_url + "original";
 
                     return GetImages(mainResult, language, tmdbImageUrl);
                 }

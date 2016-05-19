@@ -6,14 +6,13 @@ using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Localization;
 using MediaBrowser.Controller.Session;
-using MediaBrowser.Dlna.Ssdp;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Session;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Threading;
+using MediaBrowser.Controller.MediaEncoding;
 
 namespace MediaBrowser.Dlna.PlayTo
 {
@@ -34,11 +33,12 @@ namespace MediaBrowser.Dlna.PlayTo
 
         private readonly IDeviceDiscovery _deviceDiscovery;
         private readonly IMediaSourceManager _mediaSourceManager;
+        private readonly IMediaEncoder _mediaEncoder;
 
         private readonly List<string> _nonRendererUrls = new List<string>();
         private DateTime _lastRendererClear;
 
-        public PlayToManager(ILogger logger, ISessionManager sessionManager, ILibraryManager libraryManager, IUserManager userManager, IDlnaManager dlnaManager, IServerApplicationHost appHost, IImageProcessor imageProcessor, IDeviceDiscovery deviceDiscovery, IHttpClient httpClient, IServerConfigurationManager config, IUserDataManager userDataManager, ILocalizationManager localization, IMediaSourceManager mediaSourceManager)
+        public PlayToManager(ILogger logger, ISessionManager sessionManager, ILibraryManager libraryManager, IUserManager userManager, IDlnaManager dlnaManager, IServerApplicationHost appHost, IImageProcessor imageProcessor, IDeviceDiscovery deviceDiscovery, IHttpClient httpClient, IServerConfigurationManager config, IUserDataManager userDataManager, ILocalizationManager localization, IMediaSourceManager mediaSourceManager, IMediaEncoder mediaEncoder)
         {
             _logger = logger;
             _sessionManager = sessionManager;
@@ -53,6 +53,7 @@ namespace MediaBrowser.Dlna.PlayTo
             _userDataManager = userDataManager;
             _localization = localization;
             _mediaSourceManager = mediaSourceManager;
+            _mediaEncoder = mediaEncoder;
         }
 
         public void Start()
@@ -85,8 +86,6 @@ namespace MediaBrowser.Dlna.PlayTo
 
             try
             {
-                var uri = new Uri(location);
-
                 lock (_nonRendererUrls)
                 {
                     if ((DateTime.UtcNow - _lastRendererClear).TotalMinutes >= 10)
@@ -101,6 +100,7 @@ namespace MediaBrowser.Dlna.PlayTo
                     }
                 }
 
+                var uri = new Uri(location);
                 var device = await Device.CreateuPnpDeviceAsync(uri, _httpClient, _config, _logger).ConfigureAwait(false);
 
                 if (device.RendererCommands == null)
@@ -135,7 +135,8 @@ namespace MediaBrowser.Dlna.PlayTo
                         _userDataManager,
                         _localization,
                         _mediaSourceManager,
-                        _config);
+                        _config,
+                        _mediaEncoder);
 
                     controller.Init(device);
 
@@ -172,7 +173,7 @@ namespace MediaBrowser.Dlna.PlayTo
 
         private string GetServerAddress(IPAddress localIp)
         {
-            return _appHost.GetLocalApiUrl(localIp.ToString());
+            return _appHost.GetLocalApiUrl(localIp);
         }
 
         public void Dispose()

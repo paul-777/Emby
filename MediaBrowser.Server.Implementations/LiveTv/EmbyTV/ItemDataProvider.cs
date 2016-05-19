@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using CommonIO;
-using MediaBrowser.Common.IO;
 
 namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
 {
@@ -13,7 +12,7 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
         where T : class
     {
         private readonly object _fileDataLock = new object();
-        private volatile List<T> _items;
+        private List<T> _items;
         private readonly IJsonSerializer _jsonSerializer;
         protected readonly ILogger Logger;
         private readonly string _dataPath;
@@ -31,17 +30,15 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
 
         public IReadOnlyList<T> GetAll()
         {
-            if (_items == null)
+            lock (_fileDataLock)
             {
-                lock (_fileDataLock)
+                if (_items == null)
                 {
-                    if (_items == null)
-                    {
-                        _items = GetItemsFromFile(_dataPath);
-                    }
+                    Logger.Info("Loading live tv data from {0}", _dataPath);
+                    _items = GetItemsFromFile(_dataPath);
                 }
+                return _items.ToList();
             }
-            return _items;
         }
 
         private List<T> GetItemsFromFile(string path)
@@ -50,7 +47,7 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
 
             try
             {
-                return _jsonSerializer.DeserializeFromFile<List<T>>(jsonFile);
+                return _jsonSerializer.DeserializeFromFile<List<T>>(jsonFile) ?? new List<T>();
             }
             catch (FileNotFoundException)
             {
@@ -61,7 +58,6 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
             catch (IOException ex)
             {
                 Logger.ErrorException("Error deserializing {0}", ex, jsonFile);
-                throw;
             }
             catch (Exception ex)
             {
@@ -72,6 +68,11 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
 
         private void UpdateList(List<T> newList)
         {
+            if (newList == null)
+            {
+                throw new ArgumentNullException("newList");
+            }
+
             var file = _dataPath + ".json";
             _fileSystem.CreateDirectory(Path.GetDirectoryName(file));
 
@@ -84,6 +85,11 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
 
         public virtual void Update(T item)
         {
+            if (item == null)
+            {
+                throw new ArgumentNullException("item");
+            }
+
             var list = GetAll().ToList();
 
             var index = list.FindIndex(i => EqualityComparer(i, item));
@@ -100,6 +106,11 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
 
         public virtual void Add(T item)
         {
+            if (item == null)
+            {
+                throw new ArgumentNullException("item");
+            }
+
             var list = GetAll().ToList();
 
             if (list.Any(i => EqualityComparer(i, item)))

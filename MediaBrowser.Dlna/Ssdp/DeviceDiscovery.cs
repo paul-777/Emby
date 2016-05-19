@@ -7,12 +7,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Common.Net;
-using MoreLinq;
 
 namespace MediaBrowser.Dlna.Ssdp
 {
@@ -111,24 +109,24 @@ namespace MediaBrowser.Dlna.Ssdp
 
 					var endPoint = new IPEndPoint(localIp, 1900);
 
-                    var socket = GetMulticastSocket(localIp, endPoint);
-
-                    var receiveBuffer = new byte[64000];
-
-                    CreateNotifier(localIp);
-
-                    while (!_tokenSource.IsCancellationRequested)
+                    using (var socket = GetMulticastSocket(localIp, endPoint))
                     {
-                        var receivedBytes = await socket.ReceiveAsync(receiveBuffer, 0, 64000);
+                        var receiveBuffer = new byte[64000];
 
-                        if (receivedBytes > 0)
+                        CreateNotifier(localIp);
+
+                        while (!_tokenSource.IsCancellationRequested)
                         {
-                            var args = SsdpHelper.ParseSsdpResponse(receiveBuffer);
-                            args.EndPoint = endPoint;
-                            args.LocalEndPoint = new IPEndPoint(localIp, 0);
+                            var receivedBytes = await socket.ReceiveAsync(receiveBuffer, 0, 64000);
 
-                            if (!_ssdpHandler.IsSelfNotification(args))
+                            if (receivedBytes > 0)
                             {
+                                var args = SsdpHelper.ParseSsdpResponse(receiveBuffer);
+                                args.EndPoint = endPoint;
+                                args.LocalEndPoint = new IPEndPoint(localIp, 0);
+
+                                _ssdpHandler.LogMessageReceived(args, true);
+
                                 TryCreateDevice(args);
                             }
                         }
@@ -215,14 +213,6 @@ namespace MediaBrowser.Dlna.Ssdp
                 string.IsNullOrEmpty(location))
             {
                 return;
-            }
-
-            if (_config.GetDlnaConfiguration().EnableDebugLog)
-            {
-                var headerTexts = args.Headers.Select(i => string.Format("{0}={1}", i.Key, i.Value));
-                var headerText = string.Join(",", headerTexts.ToArray());
-
-                _logger.Debug("{0} Device message received from {1}. Headers: {2}", args.Method, args.EndPoint, headerText);
             }
 
             EventHelper.FireEventIfNotNull(DeviceDiscovered, this, args, _logger);

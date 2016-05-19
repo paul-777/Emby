@@ -1,12 +1,10 @@
 ﻿using MediaBrowser.Common.Net;
-using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Providers;
-using MediaBrowser.Model.Channels;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Providers;
@@ -22,7 +20,7 @@ using System.Threading.Tasks;
 namespace MediaBrowser.Providers.Omdb
 {
     public class OmdbItemProvider : IRemoteMetadataProvider<Series, SeriesInfo>,
-        IRemoteMetadataProvider<Movie, MovieInfo>, IRemoteMetadataProvider<ChannelVideoItem, ChannelItemLookupInfo>, IRemoteMetadataProvider<LiveTvProgram, LiveTvProgramLookupInfo>
+        IRemoteMetadataProvider<Movie, MovieInfo>, IRemoteMetadataProvider<Trailer, TrailerInfo>, IRemoteMetadataProvider<LiveTvProgram, LiveTvProgramLookupInfo>
     {
         private readonly IJsonSerializer _jsonSerializer;
         private readonly IHttpClient _httpClient;
@@ -62,21 +60,17 @@ namespace MediaBrowser.Providers.Omdb
             return GetSearchResultsInternal(searchInfo, type, true, cancellationToken);
         }
 
-        private async Task<IEnumerable<RemoteSearchResult>> GetSearchResultsInternal(ItemLookupInfo searchInfo, string type, bool enableMultipleResults, CancellationToken cancellationToken)
+        private async Task<IEnumerable<RemoteSearchResult>> GetSearchResultsInternal(ItemLookupInfo searchInfo, string type, bool isSearch, CancellationToken cancellationToken)
         {
-            bool isSearch = false;
             var episodeSearchInfo = searchInfo as EpisodeInfo;
-
-            var list = new List<RemoteSearchResult>();
 
             var imdbId = searchInfo.GetProviderId(MetadataProviders.Imdb);
 
-            var url = "http://www.omdbapi.com/?plot=full&r=json";
+            var url = "https://www.omdbapi.com/?plot=full&r=json";
             if (type == "episode" && episodeSearchInfo != null)
             {
                 episodeSearchInfo.SeriesProviderIds.TryGetValue(MetadataProviders.Imdb.ToString(), out imdbId);
             }
-
 
             var name = searchInfo.Name;
             var year = searchInfo.Year;
@@ -97,7 +91,7 @@ namespace MediaBrowser.Providers.Omdb
                 }
 
                 // &s means search and returns a list of results as opposed to t
-                if (enableMultipleResults)
+                if (isSearch)
                 {
                     url += "&s=" + WebUtility.UrlEncode(name);
                 }
@@ -106,11 +100,11 @@ namespace MediaBrowser.Providers.Omdb
                     url += "&t=" + WebUtility.UrlEncode(name);
                 }
                 url += "&type=" + type;
-                isSearch = true;
             }
             else
             {
                 url += "&i=" + imdbId;
+                isSearch = false;
             }
 
             if (type == "episode")
@@ -152,14 +146,13 @@ namespace MediaBrowser.Providers.Omdb
                     }
                 }
 
-                foreach (var result in resultList)
+                return resultList.Select(result =>
                 {
                     var item = new RemoteSearchResult
                     {
                         IndexNumber = searchInfo.IndexNumber,
                         Name = result.Title,
                         ParentIndexNumber = searchInfo.ParentIndexNumber,
-                        ProviderIds = searchInfo.ProviderIds,
                         SearchProviderName = Name
                     };
 
@@ -189,30 +182,18 @@ namespace MediaBrowser.Providers.Omdb
                         item.ImageUrl = result.Poster;
                     }
 
-                    list.Add(item);
-                }
+                    return item;
+                });
             }
-
-            return list;
         }
 
-        public Task<MetadataResult<ChannelVideoItem>> GetMetadata(ChannelItemLookupInfo info, CancellationToken cancellationToken)
+        public Task<MetadataResult<Trailer>> GetMetadata(TrailerInfo info, CancellationToken cancellationToken)
         {
-            if (info.ContentType != ChannelMediaContentType.MovieExtra || info.ExtraType != ExtraType.Trailer)
-            {
-                return Task.FromResult(new MetadataResult<ChannelVideoItem>());
-            }
-
-            return GetMovieResult<ChannelVideoItem>(info, cancellationToken);
+            return GetMovieResult<Trailer>(info, cancellationToken);
         }
 
-        public Task<IEnumerable<RemoteSearchResult>> GetSearchResults(ChannelItemLookupInfo searchInfo, CancellationToken cancellationToken)
+        public Task<IEnumerable<RemoteSearchResult>> GetSearchResults(TrailerInfo searchInfo, CancellationToken cancellationToken)
         {
-            if (searchInfo.ContentType != ChannelMediaContentType.MovieExtra || searchInfo.ExtraType != ExtraType.Trailer)
-            {
-                return Task.FromResult<IEnumerable<RemoteSearchResult>>(new List<RemoteSearchResult>());
-            }
-
             return GetSearchResults(searchInfo, "movie", cancellationToken);
         }
 

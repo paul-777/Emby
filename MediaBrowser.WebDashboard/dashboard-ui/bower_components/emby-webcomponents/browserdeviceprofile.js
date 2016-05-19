@@ -37,9 +37,9 @@ define(['browser'], function (browser) {
     }
 
     function canPlayHlsWithMSE() {
-        if (window.MediaSource != null) {
+        if (window.MediaSource != null && !browser.firefox) {
             // text tracks don’t work with this in firefox
-            return !browser.firefox;
+            return true;
         }
 
         return false;
@@ -56,18 +56,6 @@ define(['browser'], function (browser) {
                 return true;
             }
 
-            // Newer mobile chrome supports it but doesn't report it
-            if (browser.chrome) {
-                var version = (browser.version || '').toString().split('.')[0];
-                try {
-                    version = parseInt(version);
-                    if (version >= 48) {
-                        return true;
-                    }
-                } catch (err) {
-
-                }
-            }
             return false;
         }
 
@@ -84,15 +72,114 @@ define(['browser'], function (browser) {
         return false;
     }
 
-    return function () {
+    function testCanPlayMkv() {
 
-        var bitrateSetting = 100000000;
+        // Unfortunately there's no real way to detect mkv support
+        if (browser.chrome) {
+
+            var userAgent = navigator.userAgent.toLowerCase();
+
+            // Not supported on opera tv
+            if (browser.operaTv) {
+                return false;
+            }
+
+            // Filter out browsers based on chromium that don't support mkv
+            if (userAgent.indexOf('vivaldi') != -1 || userAgent.indexOf('opera') != -1) {
+                return false;
+            }
+
+            return true;
+        }
+
+        if (browser.tizen) {
+            return true;
+        }
+
+        return false;
+    }
+
+    function testCanPlayTs() {
+
+        return browser.tizen || browser.web0s;
+    }
+
+    function getDirectPlayProfileForVideoContainer(container) {
+
+        var supported = false;
+
+        switch (container) {
+
+            case '3gp':
+            case 'avi':
+            case 'asf':
+            case 'flv':
+            case 'mpg':
+            case 'mpeg':
+            case 'mts':
+            case 'trp':
+            case 'vob':
+            case 'vro':
+                supported = browser.tizen;
+                break;
+            case 'm2ts':
+            case 'wmv':
+                supported = browser.tizen || browser.web0s;
+                break;
+            case 'ts':
+                supported = browser.tizen || browser.web0s;
+                if (supported) {
+                    return {
+                        Container: 'ts,mpegts',
+                        Type: 'Video'
+                    };
+                }
+                break;
+            default:
+                break;
+        }
+
+        if (!supported) {
+            return null;
+        }
+
+        return {
+            Container: container,
+            Type: 'Video'
+        };
+    }
+
+    function getMaxBitrate() {
+
+        var userAgent = navigator.userAgent.toLowerCase();
+
+        if (browser.tizen) {
+
+            // 2015 models
+            if (userAgent.indexOf('tizen 2.3') != -1) {
+                return 20000000;
+            }
+
+            // 2016 models
+            return 40000000;
+        }
+
+        return 100000000;
+    }
+
+    return function (options) {
+
+        options = options || {};
+        var physicalAudioChannels = options.audioChannels || 2;
+
+        var bitrateSetting = getMaxBitrate();
 
         var videoTestElement = document.createElement('video');
 
         var canPlayWebm = videoTestElement.canPlayType('video/webm').replace(/no/, '');
-        // No real way to detect this, but it's too good to pass up
-        var canPlayMkv = browser.chrome;
+
+        var canPlayMkv = testCanPlayMkv();
+        var canPlayTs = testCanPlayTs();
 
         var profile = {};
 
@@ -121,8 +208,11 @@ define(['browser'], function (browser) {
                 }
             }
         }
-        if (canPlayMkv) {
+
+        var mp3Added = false;
+        if (canPlayMkv || canPlayTs) {
             if (supportsMp3VideoAudio) {
+                mp3Added = true;
                 videoAudioCodecs.push('mp3');
                 hlsVideoAudioCodecs.push('mp3');
             }
@@ -131,11 +221,9 @@ define(['browser'], function (browser) {
             videoAudioCodecs.push('aac');
             hlsVideoAudioCodecs.push('aac');
         }
-        if (!canPlayMkv) {
-            if (supportsMp3VideoAudio) {
-                videoAudioCodecs.push('mp3');
-                hlsVideoAudioCodecs.push('mp3');
-            }
+        if (!mp3Added && supportsMp3VideoAudio) {
+            videoAudioCodecs.push('mp3');
+            hlsVideoAudioCodecs.push('mp3');
         }
 
         if (canPlayH264()) {
@@ -156,12 +244,30 @@ define(['browser'], function (browser) {
             });
         }
 
+        // These are formats we can't test for but some devices will support
+        ['m2ts', 'wmv', 'ts'].map(getDirectPlayProfileForVideoContainer).filter(function (i) {
+            return i != null;
+
+        }).forEach(function (i) {
+
+            profile.DirectPlayProfiles.push(i);
+        });
+
         ['opus', 'mp3', 'aac', 'flac', 'webma'].filter(canPlayAudioFormat).forEach(function (audioFormat) {
 
             profile.DirectPlayProfiles.push({
                 Container: audioFormat == 'webma' ? 'webma,webm' : audioFormat,
                 Type: 'Audio'
             });
+
+            // aac also appears in the m4a container
+            if (audioFormat == 'aac') {
+                profile.DirectPlayProfiles.push({
+                    Container: 'm4a',
+                    AudioCodec: audioFormat,
+                    Type: 'Audio'
+                });
+            }
         });
 
         if (canPlayWebm) {
@@ -192,13 +298,28 @@ define(['browser'], function (browser) {
         });
 
         // Can't use mkv on mobile because we have to use the native player controls and they won't be able to seek it
-        if (canPlayMkv && !browser.mobile) {
+        if (canPlayMkv && options.supportsCustomSeeking) {
             profile.TranscodingProfiles.push({
                 Container: 'mkv',
                 Type: 'Video',
                 AudioCodec: videoAudioCodecs.join(','),
                 VideoCodec: 'h264',
-                Context: 'Streaming'
+                Context: 'Streaming',
+                CopyTimestamps: true
+            });
+        }
+
+        if (canPlayTs) {
+            profile.TranscodingProfiles.push({
+                Container: 'ts',
+                Type: 'Video',
+                AudioCodec: videoAudioCodecs.join(','),
+                VideoCodec: 'h264',
+                Context: 'Streaming',
+                CopyTimestamps: true,
+                // If audio transcoding is needed, limit channels to number of physical audio channels
+                // Trying to transcode to 5 channels when there are only 2 speakers generally does not sound good
+                MaxAudioChannels: physicalAudioChannels.toString()
             });
         }
 
@@ -213,6 +334,20 @@ define(['browser'], function (browser) {
             });
         }
 
+        // Put mp4 ahead of webm
+        if (browser.firefox) {
+            profile.TranscodingProfiles.push({
+                Container: 'mp4',
+                Type: 'Video',
+                AudioCodec: videoAudioCodecs.join(','),
+                VideoCodec: 'h264',
+                Context: 'Streaming',
+                Protocol: 'http'
+                // Edit: Can't use this in firefox because we're seeing situations of no sound when downmixing from 6 channel to 2
+                //MaxAudioChannels: physicalAudioChannels.toString()
+            });
+        }
+
         if (canPlayWebm) {
 
             profile.TranscodingProfiles.push({
@@ -221,7 +356,10 @@ define(['browser'], function (browser) {
                 AudioCodec: 'vorbis',
                 VideoCodec: 'vpx',
                 Context: 'Streaming',
-                Protocol: 'http'
+                Protocol: 'http',
+                // If audio transcoding is needed, limit channels to number of physical audio channels
+                // Trying to transcode to 5 channels when there are only 2 speakers generally does not sound good
+                MaxAudioChannels: physicalAudioChannels.toString()
             });
         }
 
@@ -231,7 +369,10 @@ define(['browser'], function (browser) {
             AudioCodec: videoAudioCodecs.join(','),
             VideoCodec: 'h264',
             Context: 'Streaming',
-            Protocol: 'http'
+            Protocol: 'http',
+            // If audio transcoding is needed, limit channels to number of physical audio channels
+            // Trying to transcode to 5 channels when there are only 2 speakers generally does not sound good
+            MaxAudioChannels: physicalAudioChannels.toString()
         });
 
         profile.TranscodingProfiles.push({
@@ -274,6 +415,11 @@ define(['browser'], function (browser) {
                         Value: videoAudioChannels
                     },
                     {
+                        Condition: 'LessThanEqual',
+                        Property: 'AudioBitrate',
+                        Value: '128000'
+                    },
+                    {
                         Condition: 'Equals',
                         Property: 'IsSecondaryAudio',
                         Value: 'false',
@@ -300,6 +446,12 @@ define(['browser'], function (browser) {
             ]
         });
 
+        var maxLevel = '41';
+
+        if (browser.chrome && !browser.mobile) {
+            maxLevel = '51';
+        }
+
         profile.CodecProfiles.push({
             Type: 'Video',
             Codec: 'h264',
@@ -318,7 +470,7 @@ define(['browser'], function (browser) {
             {
                 Condition: 'LessThanEqual',
                 Property: 'VideoLevel',
-                Value: '41'
+                Value: maxLevel
             }]
         });
 
@@ -360,5 +512,5 @@ define(['browser'], function (browser) {
         });
 
         return profile;
-    }();
+    };
 });

@@ -6,7 +6,6 @@ using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -14,7 +13,7 @@ using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
-using MediaBrowser.Common.IO;
+using MediaBrowser.Model.Channels;
 
 namespace MediaBrowser.Controller.Entities
 {
@@ -28,6 +27,9 @@ namespace MediaBrowser.Controller.Entities
 
         public List<Guid> ThemeSongIds { get; set; }
         public List<Guid> ThemeVideoIds { get; set; }
+
+        [IgnoreDataMember]
+        public DateTime? DateLastMediaAdded { get; set; }
 
         public Folder()
         {
@@ -54,6 +56,36 @@ namespace MediaBrowser.Controller.Entities
             {
                 return true;
             }
+        }
+
+        [IgnoreDataMember]
+        public virtual bool SupportsCumulativeRunTimeTicks
+        {
+            get
+            {
+                return false;
+            }
+        }
+
+        [IgnoreDataMember]
+        public virtual bool SupportsDateLastMediaAdded
+        {
+            get
+            {
+                return false;
+            }
+        }
+
+        public override bool RequiresRefresh()
+        {
+            var baseResult = base.RequiresRefresh();
+
+            if (SupportsCumulativeRunTimeTicks && !RunTimeTicks.HasValue)
+            {
+                baseResult = true;
+            }
+
+            return baseResult;
         }
 
         [IgnoreDataMember]
@@ -112,7 +144,7 @@ namespace MediaBrowser.Controller.Entities
         [IgnoreDataMember]
         protected virtual bool SupportsShortcutChildren
         {
-            get { return ConfigurationManager.Configuration.EnableWindowsShortcuts; }
+            get { return false; }
         }
 
         /// <summary>
@@ -145,60 +177,38 @@ namespace MediaBrowser.Controller.Entities
                 item.DateModified = DateTime.UtcNow;
             }
 
-            AddChildInternal(item);
+            AddChildInternal(item.Id);
 
             await LibraryManager.CreateItem(item, cancellationToken).ConfigureAwait(false);
-
-            if (!EnableNewFolderQuerying())
-            {
-                await ItemRepository.SaveChildren(Id, ActualChildren.Select(i => i.Id).ToList(), cancellationToken).ConfigureAwait(false);
-            }
         }
 
-        private static bool EnableNewFolderQuerying()
+        protected void AddChildrenInternal(List<Guid> children)
         {
-            return ConfigurationManager.Configuration.MigrationVersion >= 1;
-        }
-
-        protected void AddChildrenInternal(IEnumerable<BaseItem> children)
-        {
-            var actualChildren = ActualChildren;
-
             lock (_childrenSyncLock)
             {
-                var newChildren = actualChildren.ToList();
+                var newChildren = ChildIds.ToList();
                 newChildren.AddRange(children);
-                _children = newChildren;
+                _children = newChildren.ToList();
             }
         }
-        protected void AddChildInternal(BaseItem child)
-        {
-            var actualChildren = ActualChildren;
-
-            lock (_childrenSyncLock)
-            {
-                var newChildren = actualChildren.ToList();
-                newChildren.Add(child);
-                _children = newChildren;
-            }
-        }
-
-        protected void RemoveChildrenInternal(IEnumerable<BaseItem> children)
-        {
-            var ids = children.Select(i => i.Id).ToList();
-            var actualChildren = ActualChildren;
-
-            lock (_childrenSyncLock)
-            {
-                _children = actualChildren.Where(i => !ids.Contains(i.Id)).ToList();
-            }
-        }
-
-        protected void ClearChildrenInternal()
+        protected void AddChildInternal(Guid child)
         {
             lock (_childrenSyncLock)
             {
-                _children = new List<BaseItem>();
+                var childIds = ChildIds.ToList();
+                if (!childIds.Contains(child))
+                {
+                    childIds.Add(child);
+                    _children = childIds.ToList();
+                }
+            }
+        }
+
+        protected void RemoveChildrenInternal(List<Guid> children)
+        {
+            lock (_childrenSyncLock)
+            {
+                _children = ChildIds.Except(children).ToList();
             }
         }
 
@@ -206,40 +216,11 @@ namespace MediaBrowser.Controller.Entities
         /// Removes the child.
         /// </summary>
         /// <param name="item">The item.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>Task.</returns>
-        /// <exception cref="System.InvalidOperationException">Unable to remove  + item.Name</exception>
-        public Task RemoveChild(BaseItem item, CancellationToken cancellationToken)
+        public void RemoveChild(BaseItem item)
         {
-            RemoveChildrenInternal(new[] { item });
+            RemoveChildrenInternal(new[] { item.Id }.ToList());
 
             item.SetParent(null);
-
-            if (!EnableNewFolderQuerying())
-            {
-                return ItemRepository.SaveChildren(Id, ActualChildren.Select(i => i.Id).ToList(), cancellationToken);
-            }
-
-            return Task.FromResult(true);
-        }
-
-        /// <summary>
-        /// Clears the children.
-        /// </summary>
-        /// <param name="cancellationToken">The cancellation token.</param>
-        /// <returns>Task.</returns>
-        public Task ClearChildren(CancellationToken cancellationToken)
-        {
-            var items = ActualChildren.ToList();
-
-            ClearChildrenInternal();
-
-            foreach (var item in items)
-            {
-                LibraryManager.ReportItemRemoved(item);
-            }
-
-            return ItemRepository.SaveChildren(Id, ActualChildren.Select(i => i.Id).ToList(), cancellationToken);
         }
 
         #region Indexing
@@ -251,8 +232,8 @@ namespace MediaBrowser.Controller.Entities
         /// <returns>Dictionary{System.StringFunc{UserIEnumerable{BaseItem}}}.</returns>
         protected virtual IEnumerable<string> GetIndexByOptions()
         {
-            return new List<string> {            
-                {"None"}, 
+            return new List<string> {
+                {"None"},
                 {"Performer"},
                 {"Genre"},
                 {"Director"},
@@ -276,7 +257,7 @@ namespace MediaBrowser.Controller.Entities
         /// <summary>
         /// The children
         /// </summary>
-        private IReadOnlyList<BaseItem> _children;
+        private IReadOnlyList<Guid> _children;
         /// <summary>
         /// The _children sync lock
         /// </summary>
@@ -285,21 +266,30 @@ namespace MediaBrowser.Controller.Entities
         /// Gets or sets the actual children.
         /// </summary>
         /// <value>The actual children.</value>
+        protected virtual IEnumerable<Guid> ChildIds
+        {
+            get
+            {
+                lock (_childrenSyncLock)
+                {
+                    if (_children == null)
+                    {
+                        _children = LoadChildren().ToList();
+                    }
+                    return _children.ToList();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the actual children.
+        /// </summary>
+        /// <value>The actual children.</value>
         protected virtual IEnumerable<BaseItem> ActualChildren
         {
             get
             {
-                if (_children == null)
-                {
-                    lock (_childrenSyncLock)
-                    {
-                        if (_children == null)
-                        {
-                            _children = LoadChildren().ToList();
-                        }
-                    }
-                }
-                return _children;
+                return ChildIds.Select(LibraryManager.GetItemById).Where(i => i != null);
             }
         }
 
@@ -353,7 +343,7 @@ namespace MediaBrowser.Controller.Entities
         /// Loads our children.  Validation will occur externally.
         /// We want this sychronous.
         /// </summary>
-        protected virtual IEnumerable<BaseItem> LoadChildren()
+        protected virtual IEnumerable<Guid> LoadChildren()
         {
             //just load our children from the repo - the library will be validated and maintained in other processes
             return GetCachedChildren();
@@ -503,7 +493,7 @@ namespace MediaBrowser.Controller.Entities
 
                     if (actualRemovals.Count > 0)
                     {
-                        RemoveChildrenInternal(actualRemovals);
+                        RemoveChildrenInternal(actualRemovals.Select(i => i.Id).ToList());
 
                         foreach (var item in actualRemovals)
                         {
@@ -518,12 +508,7 @@ namespace MediaBrowser.Controller.Entities
 
                     await LibraryManager.CreateItems(newItems, cancellationToken).ConfigureAwait(false);
 
-                    AddChildrenInternal(newItems);
-
-                    if (!EnableNewFolderQuerying())
-                    {
-                        await ItemRepository.SaveChildren(Id, ActualChildren.Select(i => i.Id).ToList(), cancellationToken).ConfigureAwait(false);
-                    }
+                    AddChildrenInternal(newItems.Select(i => i.Id).ToList());
                 }
             }
 
@@ -544,7 +529,7 @@ namespace MediaBrowser.Controller.Entities
 
                 var innerProgress = new ActionableProgress<double>();
 
-                innerProgress.RegisterAction(p => progress.Report((.80 * p) + 20));
+                innerProgress.RegisterAction(p => progress.Report(.80 * p + 20));
 
                 if (container != null)
                 {
@@ -678,7 +663,7 @@ namespace MediaBrowser.Controller.Entities
                         var percent = percentages.Values.Sum();
                         percent /= childCount;
 
-                        progress.Report((10 * percent) + 10);
+                        progress.Report(10 * percent + 10);
                     }
                 });
 
@@ -751,51 +736,433 @@ namespace MediaBrowser.Controller.Entities
         /// Get our children from the repo - stubbed for now
         /// </summary>
         /// <returns>IEnumerable{BaseItem}.</returns>
-        protected IEnumerable<BaseItem> GetCachedChildren()
+        protected IEnumerable<Guid> GetCachedChildren()
         {
-            if (EnableNewFolderQuerying())
+            return ItemRepository.GetItemIdsList(new InternalItemsQuery
             {
-                return ItemRepository.GetItemList(new InternalItemsQuery
-                {
-                    ParentId = Id
-
-                }).Select(RetrieveChild).Where(i => i != null);
-            }
-
-            return ItemRepository.GetChildrenItems(Id).Select(RetrieveChild).Where(i => i != null);
+                ParentId = Id,
+                GroupByPresentationUniqueKey = false
+            });
         }
 
-        private BaseItem RetrieveChild(BaseItem child)
+        public QueryResult<BaseItem> QueryRecursive(InternalItemsQuery query)
         {
-            if (child == null || child.Id == Guid.Empty)
-            {
-                Logger.Error("Item found with empty Id: " + (child.Path ?? child.Name));
-                return null;
-            }
+            var user = query.User;
 
-            var item = LibraryManager.GetMemoryItemById(child.Id);
-
-            if (item != null)
+            if (RequiresPostFiltering(query))
             {
-                if (item is IByReferenceItem)
+                IEnumerable<BaseItem> items;
+                Func<BaseItem, bool> filter = i => UserViewBuilder.Filter(i, user, query, UserDataManager, LibraryManager);
+
+                if (query.User == null)
                 {
-                    return LibraryManager.GetOrAddByReferenceItem(item);
+                    items = GetRecursiveChildren(filter);
+                }
+                else
+                {
+                    items = GetRecursiveChildren(user, filter);
                 }
 
-                item.SetParent(this);
-            }
-            else
-            {
-                child.SetParent(this);
-                LibraryManager.RegisterItem(child);
-                item = child;
+                return PostFilterAndSort(items, query);
             }
 
-            return item;
+            if (!(this is UserRootFolder) && !(this is AggregateFolder))
+            {
+                query.ParentId = query.ParentId ?? Id;
+            }
+
+            return LibraryManager.GetItemsResult(query);
         }
 
-        public virtual Task<QueryResult<BaseItem>> GetItems(InternalItemsQuery query)
+        private bool RequiresPostFiltering(InternalItemsQuery query)
         {
+            if (LinkedChildren.Count > 0)
+            {
+                if (!(this is ICollectionFolder))
+                {
+                    Logger.Debug("Query requires post-filtering due to LinkedChildren");
+                    return true;
+                }
+            }
+            
+            var supportsUserDataQueries = ConfigurationManager.Configuration.SchemaVersion >= 76;
+
+            if (query.SortBy != null && query.SortBy.Length > 0)
+            {
+                if (!supportsUserDataQueries)
+                {
+                    if (query.SortBy.Contains(ItemSortBy.DatePlayed, StringComparer.OrdinalIgnoreCase))
+                    {
+                        Logger.Debug("Query requires post-filtering due to ItemSortBy.IsFavoriteOrLiked");
+                        return true;
+                    }
+                    if (query.SortBy.Contains(ItemSortBy.PlayCount, StringComparer.OrdinalIgnoreCase))
+                    {
+                        Logger.Debug("Query requires post-filtering due to ItemSortBy.PlayCount");
+                        return true;
+                    }
+                    if (query.SortBy.Contains(ItemSortBy.IsFavoriteOrLiked, StringComparer.OrdinalIgnoreCase))
+                    {
+                        Logger.Debug("Query requires post-filtering due to ItemSortBy.IsFavoriteOrLiked");
+                        return true;
+                    }
+                    if (query.SortBy.Contains(ItemSortBy.IsPlayed, StringComparer.OrdinalIgnoreCase))
+                    {
+                        Logger.Debug("Query requires post-filtering due to ItemSortBy.IsPlayed");
+                        return true;
+                    }
+                    if (query.SortBy.Contains(ItemSortBy.IsUnplayed, StringComparer.OrdinalIgnoreCase))
+                    {
+                        Logger.Debug("Query requires post-filtering due to ItemSortBy.IsUnplayed");
+                        return true;
+                    }
+                }
+                if (query.SortBy.Contains(ItemSortBy.AiredEpisodeOrder, StringComparer.OrdinalIgnoreCase))
+                {
+                    Logger.Debug("Query requires post-filtering due to ItemSortBy.AiredEpisodeOrder");
+                    return true;
+                }
+                if (query.SortBy.Contains(ItemSortBy.AlbumArtist, StringComparer.OrdinalIgnoreCase))
+                {
+                    Logger.Debug("Query requires post-filtering due to ItemSortBy.AlbumArtist");
+                    return true;
+                }
+                if (query.SortBy.Contains(ItemSortBy.Artist, StringComparer.OrdinalIgnoreCase))
+                {
+                    Logger.Debug("Query requires post-filtering due to ItemSortBy.Artist");
+                    return true;
+                }
+                if (query.SortBy.Contains(ItemSortBy.Budget, StringComparer.OrdinalIgnoreCase))
+                {
+                    Logger.Debug("Query requires post-filtering due to ItemSortBy.Budget");
+                    return true;
+                }
+                if (query.SortBy.Contains(ItemSortBy.GameSystem, StringComparer.OrdinalIgnoreCase))
+                {
+                    Logger.Debug("Query requires post-filtering due to ItemSortBy.GameSystem");
+                    return true;
+                }
+                if (query.SortBy.Contains(ItemSortBy.Metascore, StringComparer.OrdinalIgnoreCase))
+                {
+                    Logger.Debug("Query requires post-filtering due to ItemSortBy.Metascore");
+                    return true;
+                }
+                if (query.SortBy.Contains(ItemSortBy.OfficialRating, StringComparer.OrdinalIgnoreCase))
+                {
+                    Logger.Debug("Query requires post-filtering due to ItemSortBy.OfficialRating");
+                    return true;
+                }
+                if (query.SortBy.Contains(ItemSortBy.Players, StringComparer.OrdinalIgnoreCase))
+                {
+                    Logger.Debug("Query requires post-filtering due to ItemSortBy.Players");
+                    return true;
+                }
+                if (query.SortBy.Contains(ItemSortBy.Revenue, StringComparer.OrdinalIgnoreCase))
+                {
+                    Logger.Debug("Query requires post-filtering due to ItemSortBy.Revenue");
+                    return true;
+                }
+                if (query.SortBy.Contains(ItemSortBy.SeriesSortName, StringComparer.OrdinalIgnoreCase))
+                {
+                    Logger.Debug("Query requires post-filtering due to ItemSortBy.SeriesSortName");
+                    return true;
+                }
+                if (query.SortBy.Contains(ItemSortBy.Studio, StringComparer.OrdinalIgnoreCase))
+                {
+                    Logger.Debug("Query requires post-filtering due to ItemSortBy.Studio");
+                    return true;
+                }
+                if (query.SortBy.Contains(ItemSortBy.VideoBitRate, StringComparer.OrdinalIgnoreCase))
+                {
+                    Logger.Debug("Query requires post-filtering due to ItemSortBy.VideoBitRate");
+                    return true;
+                }
+            }
+
+            if (query.ItemIds.Length > 0)
+            {
+                Logger.Debug("Query requires post-filtering due to ItemIds");
+                return true;
+            }
+
+            if (query.PersonIds.Length > 0)
+            {
+                Logger.Debug("Query requires post-filtering due to PersonIds");
+                return true;
+            }
+
+            if (!supportsUserDataQueries)
+            {
+                if (query.IsLiked.HasValue)
+                {
+                    Logger.Debug("Query requires post-filtering due to IsLiked");
+                    return true;
+                }
+
+                if (query.IsFavoriteOrLiked.HasValue)
+                {
+                    Logger.Debug("Query requires post-filtering due to IsFavoriteOrLiked");
+                    return true;
+                }
+
+                if (query.IsFavorite.HasValue)
+                {
+                    Logger.Debug("Query requires post-filtering due to IsFavorite");
+                    return true;
+                }
+
+                if (query.IsResumable.HasValue)
+                {
+                    Logger.Debug("Query requires post-filtering due to IsResumable");
+                    return true;
+                }
+
+                if (query.IsPlayed.HasValue)
+                {
+                    Logger.Debug("Query requires post-filtering due to IsPlayed");
+                    return true;
+                }
+            }
+
+            if (query.IsInBoxSet.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to IsInBoxSet");
+                return true;
+            }
+
+            // Filter by Video3DFormat
+            if (query.Is3D.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to Is3D");
+                return true;
+            }
+
+            if (query.HasImdbId.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to HasImdbId");
+                return true;
+            }
+
+            if (query.HasTmdbId.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to HasTmdbId");
+                return true;
+            }
+
+            if (query.HasTvdbId.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to HasTvdbId");
+                return true;
+            }
+
+            if (query.IsYearMismatched.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to IsYearMismatched");
+                return true;
+            }
+
+            if (query.HasOfficialRating.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to HasOfficialRating");
+                return true;
+            }
+
+            if (query.IsPlaceHolder.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to IsPlaceHolder");
+                return true;
+            }
+
+            if (query.HasSpecialFeature.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to HasSpecialFeature");
+                return true;
+            }
+
+            if (query.HasSubtitles.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to HasSubtitles");
+                return true;
+            }
+
+            if (query.HasTrailer.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to HasTrailer");
+                return true;
+            }
+
+            if (query.HasThemeSong.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to HasThemeSong");
+                return true;
+            }
+
+            if (query.HasThemeVideo.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to HasThemeVideo");
+                return true;
+            }
+
+            // Filter by VideoType
+            if (query.VideoTypes.Length > 0)
+            {
+                Logger.Debug("Query requires post-filtering due to VideoTypes");
+                return true;
+            }
+
+            if (query.ImageTypes.Length > 0)
+            {
+                Logger.Debug("Query requires post-filtering due to ImageTypes");
+                return true;
+            }
+
+            // Apply studio filter
+            if (query.StudioIds.Length > 0)
+            {
+                Logger.Debug("Query requires post-filtering due to StudioIds");
+                return true;
+            }
+
+            // Apply genre filter
+            if (query.GenreIds.Length > 0)
+            {
+                Logger.Debug("Query requires post-filtering due to GenreIds");
+                return true;
+            }
+
+            // Apply person filter
+            if (query.ItemIdsFromPersonFilters != null)
+            {
+                Logger.Debug("Query requires post-filtering due to ItemIdsFromPersonFilters");
+                return true;
+            }
+
+            if (query.MinPlayers.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to MinPlayers");
+                return true;
+            }
+
+            if (query.MaxPlayers.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to MaxPlayers");
+                return true;
+            }
+
+            if (query.OfficialRatings.Length > 0)
+            {
+                Logger.Debug("Query requires post-filtering due to OfficialRatings");
+                return true;
+            }
+
+            if (query.IsMissing.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to IsMissing");
+                return true;
+            }
+
+            if (query.IsUnaired.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to IsUnaired");
+                return true;
+            }
+
+            if (query.IsVirtualUnaired.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to IsVirtualUnaired");
+                return true;
+            }
+
+            if (UserViewBuilder.CollapseBoxSetItems(query, this, query.User))
+            {
+                Logger.Debug("Query requires post-filtering due to CollapseBoxSetItems");
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(query.AdjacentTo))
+            {
+                Logger.Debug("Query requires post-filtering due to AdjacentTo");
+                return true;
+            }
+
+            if (query.AirDays.Length > 0)
+            {
+                Logger.Debug("Query requires post-filtering due to AirDays");
+                return true;
+            }
+
+            if (query.SeriesStatuses.Length > 0)
+            {
+                Logger.Debug("Query requires post-filtering due to SeriesStatuses");
+                return true;
+            }
+
+            if (query.AiredDuringSeason.HasValue)
+            {
+                Logger.Debug("Query requires post-filtering due to AiredDuringSeason");
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(query.AlbumArtistStartsWithOrGreater))
+            {
+                Logger.Debug("Query requires post-filtering due to AlbumArtistStartsWithOrGreater");
+                return true;
+            }
+
+            if (query.ArtistNames.Length > 0)
+            {
+                Logger.Debug("Query requires post-filtering due to ArtistNames");
+                return true;
+            }
+
+            return false;
+        }
+
+        public Task<QueryResult<BaseItem>> GetItems(InternalItemsQuery query)
+        {
+            if (query.ItemIds.Length > 0)
+            {
+                var specificItems = query.ItemIds.Select(LibraryManager.GetItemById).Where(i => i != null).ToList();
+                return Task.FromResult(PostFilterAndSort(specificItems, query));
+            }
+
+            return GetItemsInternal(query);
+        }
+
+        protected virtual async Task<QueryResult<BaseItem>> GetItemsInternal(InternalItemsQuery query)
+        {
+            if (SourceType == SourceType.Channel)
+            {
+                try
+                {
+                    // Don't blow up here because it could cause parent screens with other content to fail
+                    return await ChannelManager.GetChannelItemsInternal(new ChannelItemQuery
+                    {
+                        ChannelId = ChannelId,
+                        FolderId = Id.ToString("N"),
+                        Limit = query.Limit,
+                        StartIndex = query.StartIndex,
+                        UserId = query.User.Id.ToString("N"),
+                        SortBy = query.SortBy,
+                        SortOrder = query.SortOrder
+
+                    }, new Progress<double>(), CancellationToken.None);
+                }
+                catch
+                {
+                    // Already logged at lower levels
+                    return new QueryResult<BaseItem>
+                    {
+
+                    };
+                }
+            }
+
+            if (query.Recursive)
+            {
+                return QueryRecursive(query);
+            }
+
             var user = query.User;
 
             Func<BaseItem, bool> filter = i => UserViewBuilder.Filter(i, user, query, UserDataManager, LibraryManager);
@@ -815,9 +1182,7 @@ namespace MediaBrowser.Controller.Entities
                    : GetChildren(user, true).Where(filter);
             }
 
-            var result = PostFilterAndSort(items, query);
-
-            return Task.FromResult(result);
+            return PostFilterAndSort(items, query);
         }
 
         protected QueryResult<BaseItem> PostFilterAndSort(IEnumerable<BaseItem> items, InternalItemsQuery query)
@@ -928,33 +1293,42 @@ namespace MediaBrowser.Controller.Entities
 
         public IList<BaseItem> GetRecursiveChildren(Func<BaseItem, bool> filter)
         {
-            var list = new List<BaseItem>();
+            var result = new Dictionary<Guid, BaseItem>();
 
-            AddChildrenToList(list, true, filter);
+            AddChildrenToList(result, true, true, filter);
 
-            return list;
+            return result.Values.ToList();
         }
 
         /// <summary>
         /// Adds the children to list.
         /// </summary>
-        /// <param name="list">The list.</param>
-        /// <param name="recursive">if set to <c>true</c> [recursive].</param>
-        /// <param name="filter">The filter.</param>
-        private void AddChildrenToList(List<BaseItem> list, bool recursive, Func<BaseItem, bool> filter)
+        private void AddChildrenToList(Dictionary<Guid,BaseItem> result, bool includeLinkedChildren, bool recursive, Func<BaseItem, bool> filter)
         {
             foreach (var child in Children)
             {
                 if (filter == null || filter(child))
                 {
-                    list.Add(child);
+                    result[child.Id] = child;
                 }
 
                 if (recursive && child.IsFolder)
                 {
                     var folder = (Folder)child;
 
-                    folder.AddChildrenToList(list, true, filter);
+                    // We can only support includeLinkedChildren for the first folder, or we might end up stuck in a loop of linked items
+                    folder.AddChildrenToList(result, false, true, filter);
+                }
+            }
+
+            if (includeLinkedChildren)
+            {
+                foreach (var child in GetLinkedChildren())
+                {
+                    if (filter == null || filter(child))
+                    {
+                        result[child.Id] = child;
+                    }
                 }
             }
         }
@@ -1198,38 +1572,17 @@ namespace MediaBrowser.Controller.Entities
             await Task.WhenAll(tasks).ConfigureAwait(false);
         }
 
-        /// <summary>
-        /// Finds an item by path, recursively
-        /// </summary>
-        /// <param name="path">The path.</param>
-        /// <returns>BaseItem.</returns>
-        /// <exception cref="System.ArgumentNullException"></exception>
-        public BaseItem FindByPath(string path)
-        {
-            if (string.IsNullOrEmpty(path))
-            {
-                throw new ArgumentNullException();
-            }
-
-            if (string.Equals(Path, path, StringComparison.OrdinalIgnoreCase))
-            {
-                return this;
-            }
-
-            if (PhysicalLocations.Contains(path, StringComparer.OrdinalIgnoreCase))
-            {
-                return this;
-            }
-
-            return GetRecursiveChildren(i => string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase) ||
-                (!i.IsFolder && !i.IsInMixedFolder && string.Equals(i.ContainingFolderPath, path, StringComparison.OrdinalIgnoreCase)) ||
-                i.PhysicalLocations.Contains(path, StringComparer.OrdinalIgnoreCase))
-                .FirstOrDefault();
-        }
-
         public override bool IsPlayed(User user)
         {
-            return GetRecursiveChildren(user, i => !i.IsFolder && i.LocationType != LocationType.Virtual)
+            var itemsResult = GetItems(new InternalItemsQuery(user)
+            {
+                Recursive = true,
+                IsFolder = false,
+                ExcludeLocationTypes = new[] { LocationType.Virtual }
+
+            }).Result;
+
+            return itemsResult.Items
                 .All(i => i.IsPlayed(user));
         }
 
@@ -1238,26 +1591,50 @@ namespace MediaBrowser.Controller.Entities
             return !IsPlayed(user);
         }
 
+        [IgnoreDataMember]
+        public virtual bool SupportsUserDataFromChildren
+        {
+            get
+            {
+                // These are just far too slow. 
+                if (this is ICollectionFolder)
+                {
+                    return false;
+                }
+                if (this is UserView)
+                {
+                    return false;
+                }
+                if (this is UserRootFolder)
+                {
+                    return false;
+                }
+
+                return true;
+            }
+        }
+
         public override void FillUserDataDtoValues(UserItemDataDto dto, UserItemData userData, User user)
         {
+            if (!SupportsUserDataFromChildren)
+            {
+                return;
+            }
+
             var recursiveItemCount = 0;
             var unplayed = 0;
 
             double totalPercentPlayed = 0;
 
-            IEnumerable<BaseItem> children;
-            var folder = this;
-
-            var season = folder as Season;
-
-            if (season != null)
+            var itemsResult = GetItems(new InternalItemsQuery(user)
             {
-                children = season.GetEpisodes(user).Where(i => i.LocationType != LocationType.Virtual);
-            }
-            else
-            {
-                children = folder.GetRecursiveChildren(user, i => !i.IsFolder && i.LocationType != LocationType.Virtual);
-            }
+                Recursive = true,
+                IsFolder = false,
+                ExcludeLocationTypes = new[] { LocationType.Virtual }
+
+            }).Result;
+
+            var children = itemsResult.Items;
 
             // Loop through each recursive child
             foreach (var child in children)
@@ -1266,7 +1643,7 @@ namespace MediaBrowser.Controller.Entities
 
                 var isUnplayed = true;
 
-                var itemUserData = UserDataManager.GetUserData(user.Id, child.GetUserDataKey());
+                var itemUserData = UserDataManager.GetUserData(user, child);
 
                 // Incrememt totalPercentPlayed
                 if (itemUserData != null)

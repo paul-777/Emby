@@ -1,4 +1,4 @@
-﻿(function () {
+﻿define(['jQuery', 'paper-icon-button-light'], function ($) {
 
     function connectToServer(page, server) {
 
@@ -15,13 +15,23 @@
                 case MediaBrowser.ConnectionState.SignedIn:
                     {
                         Dashboard.onServerChanged(apiClient.getCurrentUserId(), apiClient.accessToken(), apiClient);
-                        Dashboard.navigate('index.html');
+                        Dashboard.navigate('home.html');
                     }
                     break;
                 case MediaBrowser.ConnectionState.ServerSignIn:
                     {
                         Dashboard.onServerChanged(null, null, apiClient);
                         Dashboard.navigate('login.html?serverid=' + result.Servers[0].Id);
+                    }
+                    break;
+                case MediaBrowser.ConnectionState.ServerUpdateNeeded:
+                    {
+                        Dashboard.alert(alert({
+
+                            text: Globalize.translate('core#ServerUpdateNeeded', 'https://emby.media'),
+                            html: Globalize.translate('core#ServerUpdateNeeded', '<a href="https://emby.media">https://emby.media</a>')
+
+                        }));
                     }
                     break;
                 default:
@@ -34,14 +44,10 @@
 
     function showServerConnectionFailure() {
 
-        // Need the timeout because jquery mobile will not show a popup while another is in process of closing
-        setTimeout(function () {
-            Dashboard.alert({
-                message: Globalize.translate("MessageUnableToConnectToServer"),
-                title: Globalize.translate("HeaderConnectionFailure")
-            });
-
-        }, 300);
+        Dashboard.alert({
+            message: Globalize.translate("MessageUnableToConnectToServer"),
+            title: Globalize.translate("HeaderConnectionFailure")
+        });
     }
 
     function getServerHtml(server) {
@@ -67,7 +73,7 @@
         html += '</paper-item-body>';
 
         if (server.Id) {
-            html += '<paper-icon-button icon="' + AppInfo.moreIcon + '" class="btnServerMenu"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" class="btnServerMenu"><iron-icon icon="' + AppInfo.moreIcon + '"></iron-icon></button>';
         }
 
         html += '</paper-icon-item>';
@@ -269,7 +275,7 @@
 
         html += '</paper-item-body>';
 
-        html += '<paper-icon-button icon="' + AppInfo.moreIcon + '" class="btnInviteMenu"></paper-icon-button>';
+        html += '<button is="paper-icon-button-light" class="btnInviteMenu"><iron-icon icon="' + AppInfo.moreIcon + '"></iron-icon></button>';
 
         html += '</paper-icon-item>';
 
@@ -354,4 +360,4 @@
         loadPage(page);
     });
 
-})();
+});

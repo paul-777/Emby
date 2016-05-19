@@ -7,10 +7,9 @@
       <HttpHeaderInfo name="User-Agent" value="Kodi" match="Substring" />
     </Headers>
   </Identification>
-  <FriendlyName>Emby</FriendlyName>
   <Manufacturer>Emby</Manufacturer>
   <ManufacturerUrl>http://emby.media/</ManufacturerUrl>
-  <ModelName>Emby</ModelName>
+  <ModelName>Emby Server</ModelName>
   <ModelDescription>Emby</ModelDescription>
   <ModelNumber>Emby</ModelNumber>
   <ModelUrl>http://emby.media/</ModelUrl>
@@ -41,9 +40,9 @@
     <DirectPlayProfile container="" type="Photo" />
   </DirectPlayProfiles>
   <TranscodingProfiles>
-    <TranscodingProfile container="mp3" type="Audio" audioCodec="mp3" estimateContentLength="false" enableMpegtsM2TsMode="false" transcodeSeekInfo="Auto" context="Streaming" />
-    <TranscodingProfile container="ts" type="Video" videoCodec="h264" audioCodec="aac" estimateContentLength="false" enableMpegtsM2TsMode="false" transcodeSeekInfo="Auto" context="Streaming" />
-    <TranscodingProfile container="jpeg" type="Photo" estimateContentLength="false" enableMpegtsM2TsMode="false" transcodeSeekInfo="Auto" context="Streaming" />
+    <TranscodingProfile container="mp3" type="Audio" audioCodec="mp3" estimateContentLength="false" enableMpegtsM2TsMode="false" transcodeSeekInfo="Auto" copyTimestamps="false" context="Streaming" forceLiveStream="false" />
+    <TranscodingProfile container="ts" type="Video" videoCodec="h264" audioCodec="aac" estimateContentLength="false" enableMpegtsM2TsMode="false" transcodeSeekInfo="Auto" copyTimestamps="false" context="Streaming" forceLiveStream="false" />
+    <TranscodingProfile container="jpeg" type="Photo" estimateContentLength="false" enableMpegtsM2TsMode="false" transcodeSeekInfo="Auto" copyTimestamps="false" context="Streaming" forceLiveStream="false" />
   </TranscodingProfiles>
   <ContainerProfiles />
   <CodecProfiles />
@@ -52,6 +51,12 @@
     <SubtitleProfile format="srt" method="External" />
     <SubtitleProfile format="sub" method="External" />
     <SubtitleProfile format="srt" method="Embed" didlMode="" />
+    <SubtitleProfile format="ass" method="Embed" didlMode="" />
+    <SubtitleProfile format="ssa" method="Embed" didlMode="" />
+    <SubtitleProfile format="smi" method="Embed" didlMode="" />
+    <SubtitleProfile format="dvdsub" method="Embed" didlMode="" />
+    <SubtitleProfile format="pgs" method="Embed" didlMode="" />
+    <SubtitleProfile format="pgssub" method="Embed" didlMode="" />
     <SubtitleProfile format="sub" method="Embed" didlMode="" />
   </SubtitleProfiles>
 </Profile>

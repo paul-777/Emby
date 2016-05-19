@@ -1,6 +1,20 @@
-define(['paperdialoghelper', 'layoutManager', 'globalize', 'dialogText', 'html!./icons.html', 'css!./style.css', 'paper-button', 'paper-input'], function (paperdialoghelper, layoutManager, globalize, dialogText) {
+define(['dialogHelper', 'layoutManager', 'globalize', 'html!./../icons/nav.html', 'css!./style.css', 'paper-button', 'paper-icon-button-light', 'paper-input'], function (dialogHelper, layoutManager, globalize) {
 
-    function show(options, resolve, reject) {
+    function getIcon(icon, cssClass, canFocus, autoFocus) {
+
+        var tabIndex = canFocus ? '' : ' tabindex="-1"';
+        autoFocus = autoFocus ? ' autofocus' : '';
+        return '<button is="paper-icon-button-light" class="' + cssClass + '"' + tabIndex + autoFocus + '><iron-icon icon="' + icon + '"></iron-icon></button>';
+    }
+
+    return function (options) {
+
+        if (typeof options === 'string') {
+            options = {
+                title: '',
+                text: options
+            };
+        }
 
         var dialogOptions = {
             removeOnClose: true
@@ -20,7 +34,7 @@ define(['paperdialoghelper', 'layoutManager', 'globalize', 'dialogText', 'html!.
             dialogOptions.exitAnimationDuration = 200;
         }
 
-        var dlg = paperdialoghelper.createDialog(dialogOptions);
+        var dlg = dialogHelper.createDialog(dialogOptions);
 
         dlg.classList.add('promptDialog');
 
@@ -29,73 +43,81 @@ define(['paperdialoghelper', 'layoutManager', 'globalize', 'dialogText', 'html!.
 
         html += '<div class="promptDialogContent">';
         if (backButton) {
-            html += '<paper-icon-button tabindex="-1" icon="dialog:arrow-back" class="btnPromptExit"></paper-icon-button>';
+            html += getIcon('dialog:arrow-back', 'btnPromptExit', false);
         }
 
-        html += '<paper-input autoFocus class="txtPromptValue"></paper-input>';
+        if (options.title) {
+            html += '<h2>';
+            html += options.title;
+            html += '</h2>';
+        }
 
-        // TODO: An actual form element should probably be added
-        html += '<br/>';
-        if (raisedButtons) {
-            html += '<paper-button raised class="btnSubmit"><iron-icon icon="dialog:check"></iron-icon><span>' + globalize.translate(dialogText.buttonOk) + '</span></paper-button>';
-        } else {
-            html += '<div style="text-align:right;">';
-            html += '<paper-button class="btnSubmit">' + globalize.translate(dialogText.buttonOk) + '</paper-button>';
-            html += '<paper-button class="btnPromptExit">' + globalize.translate(dialogText.buttonCancel) + '</paper-button>';
+        html += '<form>';
+
+        html += '<paper-input autoFocus class="txtPromptValue" value="' + (options.value || '') + '" label="' + (options.label || '') + '"></paper-input>';
+
+        if (options.description) {
+            html += '<div class="fieldDescription">';
+            html += options.description;
             html += '</div>';
         }
+
+        html += '<br/>';
+        if (raisedButtons) {
+            html += '<paper-button raised class="btnSubmit"><iron-icon icon="nav:check"></iron-icon><span>' + globalize.translate('sharedcomponents#ButtonOk') + '</span></paper-button>';
+        } else {
+            html += '<div class="buttons">';
+            html += '<paper-button class="btnSubmit">' + globalize.translate('sharedcomponents#ButtonOk') + '</paper-button>';
+            html += '<paper-button class="btnPromptExit">' + globalize.translate('sharedcomponents#ButtonCancel') + '</paper-button>';
+            html += '</div>';
+        }
+        html += '</form>';
 
         html += '</div>';
 
         dlg.innerHTML = html;
 
-        if (options.text) {
-            dlg.querySelector('.txtPromptValue').value = options.text;
-        }
-
-        if (options.title) {
-            dlg.querySelector('.txtPromptValue').label = options.title;
-        }
-
         document.body.appendChild(dlg);
+
+        dlg.querySelector('form').addEventListener('submit', function (e) {
+
+            submitValue = dlg.querySelector('.txtPromptValue').value;
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Important, don't close the dialog until after the form has completed submitting, or it will cause an error in Chrome
+            setTimeout(function () {
+                dialogHelper.close(dlg);
+            }, 300);
+
+            return false;
+        });
 
         dlg.querySelector('.btnSubmit').addEventListener('click', function (e) {
 
-            submitValue = dlg.querySelector('.txtPromptValue').value;
-            paperdialoghelper.close(dlg);
+            // Do a fake form submit this the button isn't a real submit button
+            var fakeSubmit = document.createElement('input');
+            fakeSubmit.setAttribute('type', 'submit');
+            fakeSubmit.style.display = 'none';
+            var form = dlg.querySelector('form');
+            form.appendChild(fakeSubmit);
+            fakeSubmit.click();
+            form.removeChild(fakeSubmit);
         });
 
         dlg.querySelector('.btnPromptExit').addEventListener('click', function (e) {
 
-            paperdialoghelper.close(dlg);
+            dialogHelper.close(dlg);
         });
 
-        dlg.addEventListener('iron-overlay-closed', function () {
-
+        return dialogHelper.open(dlg).then(function () {
             var value = submitValue;
+
             if (value) {
-                resolve(value);
+                return value;
             } else {
-                reject();
+                return Promise.reject();
             }
         });
-
-        paperdialoghelper.open(dlg);
-    }
-
-    return function (options) {
-
-        return new Promise(function (resolve, reject) {
-
-            if (typeof options === 'string') {
-                options = {
-                    title: '',
-                    text: options
-                };
-            }
-
-            show(options, resolve, reject);
-        });
-
     };
 });

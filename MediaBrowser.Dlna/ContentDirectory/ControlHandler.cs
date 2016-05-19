@@ -10,7 +10,6 @@ using MediaBrowser.Controller.Localization;
 using MediaBrowser.Dlna.Didl;
 using MediaBrowser.Dlna.Server;
 using MediaBrowser.Dlna.Service;
-using MediaBrowser.Model.Channels;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Entities;
@@ -24,7 +23,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
-using MediaBrowser.Model.Library;
+using MediaBrowser.Controller.MediaEncoding;
 
 namespace MediaBrowser.Dlna.ContentDirectory
 {
@@ -36,6 +35,7 @@ namespace MediaBrowser.Dlna.ContentDirectory
         private readonly IServerConfigurationManager _config;
         private readonly User _user;
         private readonly IUserViewManager _userViewManager;
+        private readonly IMediaEncoder _mediaEncoder;
 
         private const string NS_DC = "http://purl.org/dc/elements/1.1/";
         private const string NS_DIDL = "urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/";
@@ -49,7 +49,7 @@ namespace MediaBrowser.Dlna.ContentDirectory
 
         private readonly DeviceProfile _profile;
 
-        public ControlHandler(ILogger logger, ILibraryManager libraryManager, DeviceProfile profile, string serverAddress, string accessToken, IImageProcessor imageProcessor, IUserDataManager userDataManager, User user, int systemUpdateId, IServerConfigurationManager config, ILocalizationManager localization, IChannelManager channelManager, IMediaSourceManager mediaSourceManager, IUserViewManager userViewManager)
+        public ControlHandler(ILogger logger, ILibraryManager libraryManager, DeviceProfile profile, string serverAddress, string accessToken, IImageProcessor imageProcessor, IUserDataManager userDataManager, User user, int systemUpdateId, IServerConfigurationManager config, ILocalizationManager localization, IChannelManager channelManager, IMediaSourceManager mediaSourceManager, IUserViewManager userViewManager, IMediaEncoder mediaEncoder)
             : base(config, logger)
         {
             _libraryManager = libraryManager;
@@ -58,10 +58,11 @@ namespace MediaBrowser.Dlna.ContentDirectory
             _systemUpdateId = systemUpdateId;
             _channelManager = channelManager;
             _userViewManager = userViewManager;
+            _mediaEncoder = mediaEncoder;
             _profile = profile;
             _config = config;
 
-            _didlBuilder = new DidlBuilder(profile, user, imageProcessor, serverAddress, accessToken, userDataManager, localization, mediaSourceManager, Logger, libraryManager);
+            _didlBuilder = new DidlBuilder(profile, user, imageProcessor, serverAddress, accessToken, userDataManager, localization, mediaSourceManager, Logger, libraryManager, _mediaEncoder);
         }
 
         protected override IEnumerable<KeyValuePair<string, string>> GetResult(string methodName, Headers methodParams)
@@ -110,7 +111,7 @@ namespace MediaBrowser.Dlna.ContentDirectory
 
             var newbookmark = int.Parse(sparams["PosSecond"], _usCulture);
 
-            var userdata = _userDataManager.GetUserData(user.Id, item.GetUserDataKey());
+            var userdata = _userDataManager.GetUserData(user, item);
 
             userdata.PlaybackPositionTicks = TimeSpan.FromSeconds(newbookmark).Ticks;
 
@@ -453,32 +454,17 @@ namespace MediaBrowser.Dlna.ContentDirectory
                 sortOrders.Add(ItemSortBy.SortName);
             }
 
-            QueryResult<BaseItem> queryResult;
-
-            if (folder is UserRootFolder)
+            var queryResult = await folder.GetItems(new InternalItemsQuery
             {
-                var views = await _userViewManager.GetUserViews(new UserViewQuery { UserId = user.Id.ToString("N"), PresetViews = new[] { CollectionType.Movies, CollectionType.TvShows, CollectionType.Music } }, CancellationToken.None)
-                            .ConfigureAwait(false);
+                Limit = limit,
+                StartIndex = startIndex,
+                SortBy = sortOrders.ToArray(),
+                SortOrder = sort.SortOrder,
+                User = user,
+                Filter = FilterUnsupportedContent,
+                PresetViews = new[] { CollectionType.Movies, CollectionType.TvShows, CollectionType.Music }
 
-                queryResult = new QueryResult<BaseItem>
-                {
-                    Items = views.Cast<BaseItem>().ToArray()
-                };
-                queryResult.TotalRecordCount = queryResult.Items.Length;
-            }
-            else
-            {
-                queryResult = await folder.GetItems(new InternalItemsQuery
-               {
-                   Limit = limit,
-                   StartIndex = startIndex,
-                   SortBy = sortOrders.ToArray(),
-                   SortOrder = sort.SortOrder,
-                   User = user,
-                   Filter = FilterUnsupportedContent
-
-               }).ConfigureAwait(false);
-            }
+            }).ConfigureAwait(false);
 
             var options = _config.GetDlnaConfiguration();
 
@@ -503,12 +489,12 @@ namespace MediaBrowser.Dlna.ContentDirectory
             var itemsResult = _libraryManager.GetItemsResult(new InternalItemsQuery(user)
             {
                 Person = person.Name,
-                IncludeItemTypes = new[] { typeof(Movie).Name, typeof(Series).Name, typeof(ChannelVideoItem).Name },
+                IncludeItemTypes = new[] { typeof(Movie).Name, typeof(Series).Name, typeof(Trailer).Name },
                 SortBy = new[] { ItemSortBy.SortName },
                 Limit = limit,
                 StartIndex = startIndex
 
-            }, new string[] { });
+            });
 
             var serverItems = itemsResult.Items.Select(i => new ServerItem
             {

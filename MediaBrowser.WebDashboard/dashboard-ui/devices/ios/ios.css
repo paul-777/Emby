@@ -1,18 +1,9 @@
-﻿html, body, .ui-btn, .pageTitle {
-    font-family: San Francisco, Helvetica Neue;
-}
-
-body {
+﻿html {
     font-size: 15px;
 }
 
-.ui-body-b a:visited {
-    color: #007AFF /*{b-link-visited}*/;
-}
-
-.ui-body-b a {
-    color: #007AFF /*{b-link-color}*/;
-    font-weight: 500;
+body:not(.dashboardDocument) .mainDrawerButton {
+    display: none !important;
 }
 
 .ui-body-b select {
@@ -32,7 +23,7 @@ body {
     background-attachment: initial;
 }
 
-.background-theme-b, paper-dialog.background-theme-b {
+.background-theme-b, .dialog.background-theme-b {
     background: #181818;
 }
 
@@ -57,34 +48,22 @@ body {
         background-color: #000;
     }
 
-    .libraryViewNav a {
+.libraryViewNav {
+    box-shadow: none;
+}
+
+    .libraryViewNav .pageTabButton {
         font-weight: 400;
         text-transform: none;
-        color: #ccc !important;
-        padding: 12px 13px 8px;
     }
 
-    .libraryViewNav .tab-content {
-        display: block !important;
-    }
+        .libraryViewNav .pageTabButton.is-active:after {
+            display: none !important;
+        }
 
-    .libraryViewNav paper-tabs {
-        flex-grow: 0 !important;
-        height: 36px;
-    }
-
-    .libraryViewNav paper-tab {
-        height: auto !important;
-        flex-grow: 0 !important;
-    }
-
-    .libraryViewNav #selectionBar {
-        background-color: transparent !important;
-    }
-
-    .libraryViewNav #tabsContainer {
-        flex-grow: 0 !important;
-    }
+        .libraryViewNav .pageTabButton.is-active {
+            color: #52B54B !important;
+        }
 
 .ui-body-b .paperList:not(.criticReviewPaperList) {
     background-color: transparent;
@@ -107,23 +86,11 @@ body {
     }
 }
 
-.libraryViewNav a {
-    border-bottom: 0;
-}
-
-.libraryViewNav .ui-btn-active, .libraryViewNav .iron-selected, .btnActiveCast {
+.btnActiveCast {
     color: #52B54B !important;
 }
 
-.channelTimeslotHeader {
-    border-right-color: #52B54B !important;
-}
-
-.channelTimeslotHeader, .timeslotHeader {
-    background: #52B54B !important;
-}
-
-.libraryViewNav, paper-tabs {
+.libraryViewNav {
     font-size: 12px;
 }
 
@@ -135,34 +102,17 @@ h1, h1 a {
     font-weight: 400;
 }
 
-.channelList {
-    font-weight: 400;
-}
-
-.channelHeaderCellInner {
-    font-weight: 400;
-}
-
-.tvGuideHeader {
-    top: 86px !important;
-}
-
 .libraryMenuButtonText {
     font-weight: 500 !important;
     position: absolute;
     left: 100px;
     right: 100px;
+    top: 12px;
     text-align: center;
     font-size: 16px;
     margin: 0 auto !important;
     padding: 0 !important;
-}
-
-@media all and (max-width: 400px) {
-
-    .libraryMenuButtonText {
-        display: block;
-    }
+    justify-content: center;
 }
 
 .libraryPanelHeader span {
@@ -171,10 +121,6 @@ h1, h1 a {
 
 .noSecondaryNavPage .itemBackdrop {
     margin-top: 0;
-}
-
-paper-tab {
-    text-transform: none !important;
 }
 
 .visualCardBox {
@@ -189,29 +135,12 @@ paper-tab {
         padding: 0;
     }
 
-/* Need the div specifier to gain preference over the value in card.css */
-div.cardBox {
-    margin: 5px;
-}
-
 .cardImage {
     border-radius: 10px;
 }
 
 .viewMenuSearch {
     background: #1c1c1c;
-}
-
-@media (min-width: 600px) {
-
-    /* This needs a little extra space to account for the longer date format */
-    .channelHeaderCell, .channelTimeslotHeader {
-        width: 209px;
-    }
-
-    .programGrid, .timeslotHeaders {
-        margin-left: 210px;
-    }
 }
 
 .bottomFab {
@@ -241,4 +170,8 @@ div.cardBox {
 
 .localSyncStatus .labelSyncStatus {
     display: none !important;
+}
+
+.videoSubtitles {
+    font-size: 200% !important;
 }

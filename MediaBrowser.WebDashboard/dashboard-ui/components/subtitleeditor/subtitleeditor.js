@@ -1,4 +1,4 @@
-﻿define(['paperdialoghelper', 'paper-fab', 'paper-item-body', 'paper-icon-item'], function (paperDialogHelper) {
+﻿define(['dialogHelper', 'appStorage', 'jQuery', 'paper-fab', 'paper-item-body', 'paper-icon-item', 'paper-icon-button-light'], function (dialogHelper, appStorage, $) {
 
     var currentItem;
 
@@ -56,7 +56,9 @@
 
         }).then(function () {
 
-            Dashboard.alert(Globalize.translate('MessageDownloadQueued'));
+            require(['toast'], function (toast) {
+                toast(Globalize.translate('MessageDownloadQueued'));
+            });
         });
     }
 
@@ -64,9 +66,9 @@
 
         var msg = Globalize.translate('MessageAreYouSureDeleteSubtitles');
 
-        Dashboard.confirm(msg, Globalize.translate('HeaderConfirmDeletion'), function (result) {
+        require(['confirm'], function (confirm) {
 
-            if (result) {
+            confirm(msg, Globalize.translate('HeaderConfirmDeletion')).then(function () {
 
                 Dashboard.showLoadingMsg();
 
@@ -82,8 +84,7 @@
 
                     reload(page, itemId);
                 });
-
-            }
+            });
         });
     }
 
@@ -144,7 +145,7 @@
                 itemHtml += '</paper-item-body>';
 
                 if (s.Path) {
-                    itemHtml += '<paper-icon-button icon="delete" data-index="' + s.Index + '" title="' + Globalize.translate('Delete') + '" class="btnDelete"></paper-icon-button>';
+                    itemHtml += '<button is="paper-icon-button-light" data-index="' + s.Index + '" title="' + Globalize.translate('Delete') + '" class="btnDelete"><iron-icon icon="delete"></iron-icon></button>';
                 }
 
                 itemHtml += '</paper-icon-item>';
@@ -156,7 +157,7 @@
             html += '</div>';
         }
 
-        var elem = $('.subtitleList', page).html(html).trigger('create');
+        var elem = $('.subtitleList', page).html(html);
 
         $('.btnViewSubtitles', elem).on('click', function () {
 
@@ -257,7 +258,7 @@
 
             html += '<div style="font-size:86%;opacity:.7;">' + /*(result.CommunityRating || 0) + ' / ' +*/ (result.DownloadCount || 0) + '</div>';
 
-            html += '<paper-icon-button icon="cloud-download" data-subid="' + result.Id + '" title="' + Globalize.translate('ButtonDownload') + '" class="btnDownload"></paper-icon-button>';
+            html += '<button type="button" is="paper-icon-button-light" data-subid="' + result.Id + '" title="' + Globalize.translate('ButtonDownload') + '" class="btnDownload"><iron-icon icon="cloud-download"></iron-icon></button>';
 
             html += '</paper-icon-item>';
         }
@@ -266,7 +267,7 @@
             html += '</div>';
         }
 
-        var elem = $('.subtitleResults', page).html(html).trigger('create');
+        var elem = $('.subtitleResults', page).html(html);
 
         $('.btnViewSubtitle', elem).on('click', function () {
 
@@ -352,7 +353,7 @@
             var template = this.response;
             ApiClient.getItem(Dashboard.getCurrentUserId(), itemId).then(function (item) {
 
-                var dlg = paperDialogHelper.createDialog({
+                var dlg = dialogHelper.createDialog({
                     size: 'small',
                     removeOnClose: true
                 });
@@ -361,8 +362,8 @@
                 dlg.classList.add('background-theme-b');
 
                 var html = '';
-                html += '<div class="dialogHeader">';
-                html += '<paper-icon-button icon="arrow-back" class="btnCancel" tabindex="-1"></paper-icon-button>';
+                html += '<div class="dialogHeader" style="margin:0 0 2em;">';
+                html += '<button is="paper-icon-button-light" class="btnCancel" tabindex="-1"><iron-icon icon="arrow-back"></iron-icon></button>';
                 html += '<div class="dialogHeaderTitle">';
                 html += item.Name;
                 html += '</div>';
@@ -379,7 +380,7 @@
 
                 $('.subtitleSearchForm', dlg).off('submit', onSearchSubmit).on('submit', onSearchSubmit);
 
-                paperDialogHelper.open(dlg);
+                dialogHelper.open(dlg);
 
                 var editorContent = dlg.querySelector('.editorContent');
                 reload(editorContent, item);
@@ -391,7 +392,7 @@
 
                 $('.btnCancel', dlg).on('click', function () {
 
-                    paperDialogHelper.close(dlg);
+                    dialogHelper.close(dlg);
                 });
             });
         }

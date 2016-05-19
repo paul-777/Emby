@@ -1,5 +1,4 @@
-﻿using MediaBrowser.Common.IO;
-using MediaBrowser.Controller.Configuration;
+﻿using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
@@ -28,10 +27,12 @@ namespace MediaBrowser.Providers.Music
             {
                 if (!item.IsLocked)
                 {
-                    var itemFilter = item.GetItemFilter();
-
                     var taggedItems = item.IsAccessedByName ?
-                        LibraryManager.RootFolder.GetRecursiveChildren(i => !i.IsFolder && itemFilter(i)).ToList() :
+                        item.GetTaggedItems(new Controller.Entities.InternalItemsQuery()
+                        {
+                            Recursive = true,
+                            IsFolder = false
+                        }) :
                         item.GetRecursiveChildren(i => i is IHasArtist && !i.IsFolder).ToList();
 
                     if (!item.LockedFields.Contains(MetadataFields.Genres))

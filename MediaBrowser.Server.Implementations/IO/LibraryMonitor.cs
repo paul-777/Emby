@@ -1,5 +1,4 @@
-﻿using MediaBrowser.Common.IO;
-using MediaBrowser.Common.ScheduledTasks;
+﻿using MediaBrowser.Common.ScheduledTasks;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -76,6 +75,12 @@ namespace MediaBrowser.Server.Implementations.IO
             }
 
             TemporarilyIgnore(path);
+        }
+
+        public bool IsPathLocked(string path)
+        {
+            var lockedPaths = _tempIgnoredPaths.Keys.ToList();
+            return lockedPaths.Any(i => string.Equals(i, path, StringComparison.OrdinalIgnoreCase) || _fileSystem.ContainsSubPath(i, path));
         }
 
         public async void ReportFileSystemChangeComplete(string path, bool refreshPath)
@@ -246,7 +251,7 @@ namespace MediaBrowser.Server.Implementations.IO
         /// <exception cref="System.ArgumentNullException">path</exception>
         private static bool ContainsParentFolder(IEnumerable<string> lst, string path)
         {
-            if (string.IsNullOrEmpty(path))
+            if (string.IsNullOrWhiteSpace(path))
             {
                 throw new ArgumentNullException("path");
             }
@@ -258,7 +263,7 @@ namespace MediaBrowser.Server.Implementations.IO
                 //this should be a little quicker than examining each actual parent folder...
                 var compare = str.TrimEnd(Path.DirectorySeparatorChar);
 
-                return (path.Equals(compare, StringComparison.OrdinalIgnoreCase) || (path.StartsWith(compare, StringComparison.OrdinalIgnoreCase) && path[compare.Length] == Path.DirectorySeparatorChar));
+                return path.Equals(compare, StringComparison.OrdinalIgnoreCase) || (path.StartsWith(compare, StringComparison.OrdinalIgnoreCase) && path[compare.Length] == Path.DirectorySeparatorChar);
             });
         }
 
@@ -658,7 +663,7 @@ namespace MediaBrowser.Server.Implementations.IO
 
             while (item == null && !string.IsNullOrEmpty(path))
             {
-                item = LibraryManager.RootFolder.FindByPath(path);
+                item = LibraryManager.FindByPath(path, null);
 
                 path = Path.GetDirectoryName(path);
             }
@@ -690,8 +695,21 @@ namespace MediaBrowser.Server.Implementations.IO
 
             foreach (var watcher in _fileSystemWatchers.Values.ToList())
             {
+                watcher.Created -= watcher_Changed;
+                watcher.Deleted -= watcher_Changed;
+                watcher.Renamed -= watcher_Changed;
                 watcher.Changed -= watcher_Changed;
-                watcher.EnableRaisingEvents = false;
+
+                try
+                {
+                    watcher.EnableRaisingEvents = false;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Seeing this under mono on linux sometimes
+                    // Collection was modified; enumeration operation may not execute.
+                }
+
                 watcher.Dispose();
             }
 

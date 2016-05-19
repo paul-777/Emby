@@ -217,6 +217,7 @@ namespace MediaBrowser.ServerApplication
         {
             var fileSystem = new WindowsFileSystem(new PatternsLogger(logManager.GetLogger("FileSystem")));
             fileSystem.AddShortcutHandler(new MbLinkShortcutHandler(fileSystem));
+            //fileSystem.AddShortcutHandler(new LnkShortcutHandler(fileSystem));
 
             var nativeApp = new WindowsApp(fileSystem, _logger)
             {
@@ -256,6 +257,9 @@ namespace MediaBrowser.ServerApplication
                 task = InstallVcredistIfNeeded(_appHost, _logger);
                 Task.WaitAll(task);
 
+                task = InstallFrameworkV46IfNeeded(_logger);
+                Task.WaitAll(task);
+
                 SystemEvents.SessionEnding += SystemEvents_SessionEnding;
                 SystemEvents.SessionSwitch += SystemEvents_SessionSwitch;
 
@@ -269,11 +273,13 @@ namespace MediaBrowser.ServerApplication
         }
 
         private static ServerNotifyIcon _serverNotifyIcon;
+        private static TaskScheduler _mainTaskScheduler;
         private static void ShowTrayIcon()
         {
             //Application.EnableVisualStyles();
             //Application.SetCompatibleTextRenderingDefault(false);
             _serverNotifyIcon = new ServerNotifyIcon(_appHost.LogManager, _appHost, _appHost.ServerConfigurationManager, _appHost.LocalizationManager);
+            _mainTaskScheduler = TaskScheduler.FromCurrentSynchronizationContext();
             Application.Run();
         }
 
@@ -313,7 +319,19 @@ namespace MediaBrowser.ServerApplication
         {
             if (e.Reason == SessionSwitchReason.SessionLogon)
             {
-                BrowserLauncher.OpenDashboard(_appHost, _logger);
+                BrowserLauncher.OpenDashboard(_appHost);
+            }
+        }
+
+        public static void Invoke(Action action)
+        {
+            if (_isRunningAsService)
+            {
+                action();
+            }
+            else
+            {
+                Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.None, _mainTaskScheduler ?? TaskScheduler.Current);
             }
         }
 
@@ -551,9 +569,10 @@ namespace MediaBrowser.ServerApplication
 
         private static void ShutdownWindowsApplication()
         {
-            _logger.Info("Calling Application.Exit");
-            Application.Exit();
+            //_logger.Info("Calling Application.Exit");
+            //Application.Exit();
 
+            _logger.Info("Calling Environment.Exit");
             Environment.Exit(0);
 
             _logger.Info("Calling ApplicationTaskCompletionSource.SetResult");
@@ -570,6 +589,93 @@ namespace MediaBrowser.ServerApplication
             if (service.Status == ServiceControllerStatus.Running)
             {
                 service.Stop();
+            }
+        }
+
+        private static async Task InstallFrameworkV46IfNeeded(ILogger logger)
+        {
+            bool installFrameworkV46 = false;
+
+            try
+            {
+                using (RegistryKey ndpKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry32)
+                    .OpenSubKey("SOFTWARE\\Microsoft\\NET Framework Setup\\NDP\\v4\\Full\\"))
+                {
+                    if (ndpKey != null && ndpKey.GetValue("Release") != null)
+                    {
+                        if ((int)ndpKey.GetValue("Release") <= 393295)
+                        {
+                            //Found framework V4, but not yet V4.6
+                            installFrameworkV46 = true;
+                        }
+                    }
+                    else
+                    {
+                        //Nothing found in the registry for V4
+                        installFrameworkV46 = true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.ErrorException("Error getting .NET Framework version", ex);
+            }
+
+            _logger.Info(".NET Framework 4.6 found: {0}", !installFrameworkV46);
+
+            if (installFrameworkV46)
+            {
+                try
+                {
+                    await InstallFrameworkV46().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    logger.ErrorException("Error installing .NET Framework version 4.6", ex);
+                }
+            }
+        }
+
+        private static async Task InstallFrameworkV46()
+        {
+            var httpClient = _appHost.HttpClient;
+
+            var tmp = await httpClient.GetTempFile(new HttpRequestOptions
+            {
+                Url = "https://github.com/MediaBrowser/Emby.Resources/raw/master/netframeworkV46/NDP46-KB3045560-Web.exe",
+                Progress = new Progress<double>()
+
+            }).ConfigureAwait(false);
+
+            var exePath = Path.ChangeExtension(tmp, ".exe");
+            File.Copy(tmp, exePath);
+            
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = exePath,
+
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                Verb = "runas",
+                ErrorDialog = false,
+                Arguments = "/q /norestart"
+            };
+
+
+            _logger.Info("Running {0}", startInfo.FileName);
+
+            using (var process = Process.Start(startInfo))
+            {
+                process.WaitForExit();
+                //process.ExitCode
+                /*
+                0 --> Installation completed successfully.
+                1602 --> The user canceled installation.
+                1603 --> A fatal error occurred during installation.
+                1641 --> A restart is required to complete the installation. This message indicates success.
+                3010 --> A restart is required to complete the installation. This message indicates success.
+                5100 --> The user's computer does not meet system requirements.
+                 */
             }
         }
 

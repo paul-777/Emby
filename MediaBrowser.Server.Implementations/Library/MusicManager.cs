@@ -55,7 +55,7 @@ namespace MediaBrowser.Server.Implementations.Library
         public IEnumerable<Audio> GetInstantMixFromFolder(Folder item, User user)
         {
             var genres = item
-                .GetRecursiveChildren(user, i => i is Audio)
+               .GetRecursiveChildren(user, i => i is Audio)
                .Cast<Audio>()
                .SelectMany(i => i.Genres)
                .Concat(item.Genres)
@@ -80,7 +80,7 @@ namespace MediaBrowser.Server.Implementations.Library
         {
             var genreList = genres.ToList();
 
-            var inputItems = _libraryManager.GetItems(new InternalItemsQuery(user)
+            var inputItems = _libraryManager.GetItemList(new InternalItemsQuery(user)
             {
                 IncludeItemTypes = new[] { typeof(Audio).Name },
 

@@ -103,7 +103,7 @@ namespace MediaBrowser.Common.Implementations.ScheduledTasks
             Logger = logger;
             _fileSystem = fileSystem;
 
-            ReloadTriggerEvents(true);
+            InitTriggerEvents();
         }
 
         /// <summary>
@@ -233,11 +233,7 @@ namespace MediaBrowser.Common.Implementations.ScheduledTasks
         /// <summary>
         /// The _triggers
         /// </summary>
-        private volatile List<ITaskTrigger> _triggers;
-        /// <summary>
-        /// The _triggers sync lock
-        /// </summary>
-        private readonly object _triggersSyncLock = new object();
+        private List<ITaskTrigger> _triggers;
         /// <summary>
         /// Gets the triggers that define when the task will run
         /// </summary>
@@ -247,17 +243,6 @@ namespace MediaBrowser.Common.Implementations.ScheduledTasks
         {
             get
             {
-                if (_triggers == null)
-                {
-                    lock (_triggersSyncLock)
-                    {
-                        if (_triggers == null)
-                        {
-                            _triggers = LoadTriggers();
-                        }
-                    }
-                }
-
                 return _triggers;
             }
             set
@@ -303,6 +288,12 @@ namespace MediaBrowser.Common.Implementations.ScheduledTasks
             }
         }
 
+        private void InitTriggerEvents()
+        {
+            _triggers = LoadTriggers();
+            ReloadTriggerEvents(true);
+        }
+
         public void ReloadTriggerEvents()
         {
             ReloadTriggerEvents(false);
@@ -320,7 +311,7 @@ namespace MediaBrowser.Common.Implementations.ScheduledTasks
 
                 trigger.Triggered -= trigger_Triggered;
                 trigger.Triggered += trigger_Triggered;
-                trigger.Start(LastExecutionResult, isApplicationStartup);
+                trigger.Start(LastExecutionResult, Logger, Name, isApplicationStartup);
             }
         }
 
@@ -348,7 +339,7 @@ namespace MediaBrowser.Common.Implementations.ScheduledTasks
 
             await Task.Delay(1000).ConfigureAwait(false);
 
-            trigger.Start(LastExecutionResult, false);
+            trigger.Start(LastExecutionResult, Logger, Name, false);
         }
 
         private Task _currentTask;

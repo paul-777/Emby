@@ -1,16 +1,12 @@
 ﻿using MediaBrowser.Common.Net;
-using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Providers;
-using MediaBrowser.Model.Channels;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Net;
 using MediaBrowser.Model.Providers;
 using System.Collections.Generic;
-using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -44,7 +40,7 @@ namespace MediaBrowser.Providers.Omdb
                 list.Add(new RemoteImageInfo
                 {
                     ProviderName = Name,
-                    Url = string.Format("http://img.omdbapi.com/?i={0}&apikey=82e83907", imdbId)
+                    Url = string.Format("https://img.omdbapi.com/?i={0}&apikey=82e83907", imdbId)
                 });
             }
 
@@ -81,23 +77,6 @@ namespace MediaBrowser.Providers.Omdb
                 return false;
             }
 
-            var channelItem = item as IChannelMediaItem;
-
-            if (channelItem != null)
-            {
-                if (channelItem.ContentType == ChannelMediaContentType.Movie)
-                {
-                    return true;
-                }
-                if (channelItem.ContentType == ChannelMediaContentType.MovieExtra)
-                {
-                    if (channelItem.ExtraType == ExtraType.Trailer)
-                    {
-                        return true;
-                    }
-                }
-            }
-
             // Supports images for tv movies
             var tvProgram = item as LiveTvProgram;
             if (tvProgram != null && tvProgram.IsMovie)
@@ -105,7 +84,7 @@ namespace MediaBrowser.Providers.Omdb
                 return true;
             }
 
-            return item is Movie;
+            return item is Movie || item is Trailer;
         }
 
         public int Order

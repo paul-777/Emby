@@ -1,22 +1,18 @@
 ﻿using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Security;
-using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Localization;
-using MediaBrowser.Model.Channels;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Entities;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
-using MediaBrowser.Common.IO;
 using MoreLinq;
 
 namespace MediaBrowser.Server.Implementations.Intros
@@ -24,17 +20,15 @@ namespace MediaBrowser.Server.Implementations.Intros
     public class DefaultIntroProvider : IIntroProvider
     {
         private readonly ISecurityManager _security;
-        private readonly IChannelManager _channelManager;
         private readonly ILocalizationManager _localization;
         private readonly IConfigurationManager _serverConfig;
         private readonly ILibraryManager _libraryManager;
         private readonly IFileSystem _fileSystem;
         private readonly IMediaSourceManager _mediaSourceManager;
 
-        public DefaultIntroProvider(ISecurityManager security, IChannelManager channelManager, ILocalizationManager localization, IConfigurationManager serverConfig, ILibraryManager libraryManager, IFileSystem fileSystem, IMediaSourceManager mediaSourceManager)
+        public DefaultIntroProvider(ISecurityManager security, ILocalizationManager localization, IConfigurationManager serverConfig, ILibraryManager libraryManager, IFileSystem fileSystem, IMediaSourceManager mediaSourceManager)
         {
             _security = security;
-            _channelManager = channelManager;
             _localization = localization;
             _serverConfig = serverConfig;
             _libraryManager = libraryManager;
@@ -79,76 +73,45 @@ namespace MediaBrowser.Server.Implementations.Intros
                 AppearsInItemId = item.Id
             });
 
-            if (config.EnableIntrosFromMoviesInLibrary)
-            {
-                var inputItems = _libraryManager.GetItems(new InternalItemsQuery(user)
-                {
-                    IncludeItemTypes = new[] { typeof(Movie).Name }
-
-                }, new string[] { });
-
-                var itemsWithTrailers = inputItems
-                    .Where(i =>
-                    {
-                        var hasTrailers = i as IHasTrailers;
-
-                        if (hasTrailers != null && hasTrailers.LocalTrailerIds.Count > 0)
-                        {
-                            if (i is Movie)
-                            {
-                                return !IsDuplicate(item, i);
-                            }
-                        }
-                        return false;
-                    });
-
-                candidates.AddRange(itemsWithTrailers.Select(i => new ItemWithTrailer
-                {
-                    Item = i,
-                    Type = ItemWithTrailerType.ItemWithTrailer,
-                    User = user,
-                    WatchingItem = item,
-                    WatchingItemPeople = itemPeople,
-                    AllPeople = allPeople,
-                    Random = random,
-                    LibraryManager = _libraryManager
-                }));
-            }
-
             var trailerTypes = new List<TrailerType>();
 
-            if (config.EnableIntrosFromUpcomingTrailers)
+            if (config.EnableIntrosFromMoviesInLibrary)
             {
-                trailerTypes.Add(TrailerType.ComingSoonToTheaters);
-            }
-            if (config.EnableIntrosFromUpcomingDvdMovies)
-            {
-                trailerTypes.Add(TrailerType.ComingSoonToDvd);
-            }
-            if (config.EnableIntrosFromUpcomingStreamingMovies)
-            {
-                trailerTypes.Add(TrailerType.ComingSoonToStreaming);
-            }
-            if (config.EnableIntrosFromSimilarMovies)
-            {
-                trailerTypes.Add(TrailerType.Archive);
+                trailerTypes.Add(TrailerType.LocalTrailer);
             }
 
-            if (trailerTypes.Count > 0 && IsSupporter)
+            if (IsSupporter)
             {
-                var channelTrailers = await _channelManager.GetAllMediaInternal(new AllChannelMediaQuery
+                if (config.EnableIntrosFromUpcomingTrailers)
                 {
-                    ContentTypes = new[] { ChannelMediaContentType.MovieExtra },
-                    ExtraTypes = new[] { ExtraType.Trailer },
-                    UserId = user.Id.ToString("N"),
+                    trailerTypes.Add(TrailerType.ComingSoonToTheaters);
+                }
+                if (config.EnableIntrosFromUpcomingDvdMovies)
+                {
+                    trailerTypes.Add(TrailerType.ComingSoonToDvd);
+                }
+                if (config.EnableIntrosFromUpcomingStreamingMovies)
+                {
+                    trailerTypes.Add(TrailerType.ComingSoonToStreaming);
+                }
+                if (config.EnableIntrosFromSimilarMovies)
+                {
+                    trailerTypes.Add(TrailerType.Archive);
+                }
+            }
+
+            if (trailerTypes.Count > 0)
+            {
+                var trailerResult = _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { typeof(Trailer).Name },
                     TrailerTypes = trailerTypes.ToArray()
+                });
 
-                }, CancellationToken.None);
-
-                candidates.AddRange(channelTrailers.Items.Select(i => new ItemWithTrailer
+                candidates.AddRange(trailerResult.Select(i => new ItemWithTrailer
                 {
                     Item = i,
-                    Type = ItemWithTrailerType.ChannelTrailer,
+                    Type = i.SourceType == SourceType.Channel ? ItemWithTrailerType.ChannelTrailer : ItemWithTrailerType.ItemWithTrailer,
                     User = user,
                     WatchingItem = item,
                     WatchingItemPeople = itemPeople,
@@ -156,7 +119,7 @@ namespace MediaBrowser.Server.Implementations.Intros
                     Random = random,
                     LibraryManager = _libraryManager
                 }));
-            }
+            } 
 
             return GetResult(item, candidates, config, ratingLevel);
         }
@@ -189,7 +152,7 @@ namespace MediaBrowser.Server.Implementations.Intros
             })
                 .OrderByDescending(i => i.Score)
                 .ThenBy(i => Guid.NewGuid())
-                .ThenByDescending(i => (i.IsPlayed ? 0 : 1))
+                .ThenByDescending(i => i.IsPlayed ? 0 : 1)
                 .Select(i => i.IntroInfo)
                 .Take(trailerLimit)
                 .Concat(customIntros.Take(1))
@@ -556,7 +519,6 @@ namespace MediaBrowser.Server.Implementations.Intros
 
         internal enum ItemWithTrailerType
         {
-            LibraryTrailer,
             ChannelTrailer,
             ItemWithTrailer
         }

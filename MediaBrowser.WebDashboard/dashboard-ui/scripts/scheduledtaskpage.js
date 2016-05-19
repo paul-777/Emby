@@ -64,7 +64,7 @@ var ScheduledTaskPage = {
 
             html += '</paper-item-body>';
 
-            html += '<paper-icon-button icon="delete" title="' + Globalize.translate('ButtonDelete') + '" onclick="ScheduledTaskPage.confirmDeleteTrigger(' + i + ');"></paper-icon-button>';
+            html += '<button type="button" is="paper-icon-button-light" title="' + Globalize.translate('ButtonDelete') + '" onclick="ScheduledTaskPage.confirmDeleteTrigger(' + i + ');"><iron-icon icon="delete"></iron-icon></button>';
 
             html += '</paper-icon-item>';
         }
@@ -169,14 +169,11 @@ var ScheduledTaskPage = {
 
     confirmDeleteTrigger: function (index) {
 
-        Dashboard.confirm(Globalize.translate('MessageDeleteTaskTrigger'), Globalize.translate('HeaderDeleteTaskTrigger'), function (result) {
-
-            if (result) {
+        require(['confirm'], function (confirm) {
+            confirm(Globalize.translate('MessageDeleteTaskTrigger'), Globalize.translate('HeaderDeleteTaskTrigger')).then(function () {
                 ScheduledTaskPage.deleteTrigger(index);
-            }
-
+            });
         });
-
     },
 
     deleteTrigger: function (index) {
@@ -321,7 +318,11 @@ var ScheduledTaskPage = {
 
     $(document).on('pageinit', "#scheduledTaskPage", function () {
 
+        var page = this;
+
         $('.addTriggerForm').off('submit', onSubmit).on('submit', onSubmit);
+
+        page.querySelector('.timeFieldExample').innerHTML = Globalize.translate('ValueExample', '1:00 PM');
 
     }).on('pageshow', "#scheduledTaskPage", function () {
 

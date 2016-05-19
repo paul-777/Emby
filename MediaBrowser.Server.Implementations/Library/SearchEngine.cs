@@ -87,12 +87,15 @@ namespace MediaBrowser.Server.Implementations.Library
         {
             var searchTerm = query.SearchTerm;
 
+            if (searchTerm != null)
+            {
+                searchTerm = searchTerm.Trim().RemoveDiacritics();
+            }
+
             if (string.IsNullOrWhiteSpace(searchTerm))
             {
                 throw new ArgumentNullException("searchTerm");
             }
-
-            searchTerm = searchTerm.RemoveDiacritics();
 
             var terms = GetWords(searchTerm);
 
@@ -157,7 +160,7 @@ namespace MediaBrowser.Server.Implementations.Library
 
             AddIfMissing(excludeItemTypes, typeof(CollectionFolder).Name);
 
-            var mediaItems = _libraryManager.GetItems(new InternalItemsQuery(user)
+            var mediaItems = _libraryManager.GetItemList(new InternalItemsQuery(user)
             {
                 NameContains = searchTerm,
                 ExcludeItemTypes = excludeItemTypes.ToArray(),

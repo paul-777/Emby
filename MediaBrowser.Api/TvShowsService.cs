@@ -123,7 +123,7 @@ namespace MediaBrowser.Api
     }
 
     [Route("/Shows/{Id}/Episodes", "GET", Summary = "Gets episodes for a tv season")]
-    public class GetEpisodes : IReturn<ItemsResult>, IHasItemFields
+    public class GetEpisodes : IReturn<ItemsResult>, IHasItemFields, IHasDtoOptions
     {
         /// <summary>
         /// Gets or sets the user id.
@@ -173,10 +173,19 @@ namespace MediaBrowser.Api
         /// <value>The limit.</value>
         [ApiMember(Name = "Limit", Description = "Optional. The maximum number of records to return", IsRequired = false, DataType = "int", ParameterType = "query", Verb = "GET")]
         public int? Limit { get; set; }
+
+        [ApiMember(Name = "EnableImages", Description = "Optional, include image information in output", IsRequired = false, DataType = "boolean", ParameterType = "query", Verb = "GET")]
+        public bool? EnableImages { get; set; }
+
+        [ApiMember(Name = "ImageTypeLimit", Description = "Optional, the max number of images to return, per image type", IsRequired = false, DataType = "int", ParameterType = "query", Verb = "GET")]
+        public int? ImageTypeLimit { get; set; }
+
+        [ApiMember(Name = "EnableImageTypes", Description = "Optional. The image types to include in the output.", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET")]
+        public string EnableImageTypes { get; set; }
     }
 
     [Route("/Shows/{Id}/Seasons", "GET", Summary = "Gets seasons for a tv series")]
-    public class GetSeasons : IReturn<ItemsResult>, IHasItemFields
+    public class GetSeasons : IReturn<ItemsResult>, IHasItemFields, IHasDtoOptions
     {
         /// <summary>
         /// Gets or sets the user id.
@@ -206,6 +215,15 @@ namespace MediaBrowser.Api
 
         [ApiMember(Name = "AdjacentTo", Description = "Optional. Return items that are siblings of a supplied item.", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET")]
         public string AdjacentTo { get; set; }
+
+        [ApiMember(Name = "EnableImages", Description = "Optional, include image information in output", IsRequired = false, DataType = "boolean", ParameterType = "query", Verb = "GET")]
+        public bool? EnableImages { get; set; }
+
+        [ApiMember(Name = "ImageTypeLimit", Description = "Optional, the max number of images to return, per image type", IsRequired = false, DataType = "int", ParameterType = "query", Verb = "GET")]
+        public int? ImageTypeLimit { get; set; }
+
+        [ApiMember(Name = "EnableImageTypes", Description = "Optional. The image types to include in the output.", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET")]
+        public string EnableImageTypes { get; set; }
     }
 
     /// <summary>
@@ -263,7 +281,7 @@ namespace MediaBrowser.Api
                 _userDataManager,
                 _dtoService,
                 Logger,
-                request, item => item is Series,
+                request, new[] { typeof(Series) },
                 SimilarItemsHelper.GetSimiliarityScore);
 
             return ToOptimizedSerializedResultUsingCache(result);
@@ -273,11 +291,11 @@ namespace MediaBrowser.Api
         {
             var user = _userManager.GetUserById(request.UserId);
 
-            var minPremiereDate = DateTime.Now.Date.AddDays(-1).ToUniversalTime();
+            var minPremiereDate = DateTime.Now.Date.ToUniversalTime().AddDays(-1);
 
             var parentIds = string.IsNullOrWhiteSpace(request.ParentId) ? new string[] { } : new[] { request.ParentId };
 
-            var itemsResult = _libraryManager.GetItemsResult(new InternalItemsQuery(user)
+            var itemsResult = _libraryManager.GetItemList(new InternalItemsQuery(user)
             {
                 IncludeItemTypes = new[] { typeof(Episode).Name },
                 SortBy = new[] { "PremiereDate", "AirTime", "SortName" },
@@ -286,15 +304,15 @@ namespace MediaBrowser.Api
                 StartIndex = request.StartIndex,
                 Limit = request.Limit
 
-            }, parentIds);
+            }, parentIds).ToList();
 
             var options = GetDtoOptions(request);
 
-            var returnItems = _dtoService.GetBaseItemDtos(itemsResult.Items, options, user).ToArray();
+            var returnItems = _dtoService.GetBaseItemDtos(itemsResult, options, user).ToArray();
 
             var result = new ItemsResult
             {
-                TotalRecordCount = itemsResult.TotalRecordCount,
+                TotalRecordCount = itemsResult.Count,
                 Items = returnItems
             };
 
@@ -411,7 +429,7 @@ namespace MediaBrowser.Api
             if (request.IsMissing.HasValue)
             {
                 var val = request.IsMissing.Value;
-                items = items.Where(i => i.IsMissingSeason == val);
+                items = items.Where(i => (i.IsMissingSeason ?? false) == val);
             }
 
             if (request.IsVirtualUnaired.HasValue)
@@ -490,8 +508,7 @@ namespace MediaBrowser.Api
                 returnItems = UserViewBuilder.FilterForAdjacency(returnItems, request.AdjacentTo);
             }
 
-            var returnList = _libraryManager.ReplaceVideosWithPrimaryVersions(returnItems)
-                .ToList();
+            var returnList = returnItems.ToList();
 
             var pagedItems = ApplyPaging(returnList, request.StartIndex, request.Limit);
 

@@ -1,12 +1,13 @@
 ﻿using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Model.Channels;
 using MediaBrowser.Model.Entities;
 using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
 
 namespace MediaBrowser.Server.Implementations.Library
 {
@@ -23,17 +24,25 @@ namespace MediaBrowser.Server.Implementations.Library
 
         public async Task Run(IProgress<double> progress, CancellationToken cancellationToken)
         {
-            var items = _libraryManager.RootFolder
-                .GetRecursiveChildren(i => i is IHasTrailers)
-                .Cast<IHasTrailers>()
-                .ToList();
-
-            var channelTrailerResult = await _channelManager.GetAllMediaInternal(new AllChannelMediaQuery
+            var items = _libraryManager.GetItemList(new InternalItemsQuery
             {
-                ExtraTypes = new[] { ExtraType.Trailer }
+                IncludeItemTypes = new[] { typeof(BoxSet).Name, typeof(Game).Name, typeof(Movie).Name, typeof(Series).Name },
+                Recursive = true
 
-            }, CancellationToken.None);
-            var channelTrailers = channelTrailerResult.Items;
+            }).OfType<IHasTrailers>().ToList();
+
+            var trailerTypes = Enum.GetNames(typeof(TrailerType))
+                    .Select(i => (TrailerType)Enum.Parse(typeof(TrailerType), i, true))
+                    .Except(new[] { TrailerType.LocalTrailer })
+                    .ToArray();
+
+            var trailers = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { typeof(Trailer).Name },
+                TrailerTypes = trailerTypes,
+                Recursive = true
+
+            }).ToArray();
 
             var numComplete = 0;
 
@@ -41,7 +50,7 @@ namespace MediaBrowser.Server.Implementations.Library
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                await AssignTrailers(item, channelTrailers).ConfigureAwait(false);
+                await AssignTrailers(item, trailers).ConfigureAwait(false);
 
                 numComplete++;
                 double percent = numComplete;

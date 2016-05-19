@@ -1,4 +1,4 @@
-﻿(function ($, document, window) {
+﻿define(['appSettings', 'appStorage', 'libraryBrowser', 'apphost', 'jQuery', 'itemHelper', 'mediaInfo'], function (appSettings, appStorage, LibraryBrowser, appHost, $, itemHelper, mediaInfo) {
 
     var showOverlayTimeout;
 
@@ -28,10 +28,15 @@
             return;
         }
 
+        if (!elem.animate) {
+            elem.classList.add('hide');
+            return;
+        }
+
         requestAnimationFrame(function () {
             var keyframes = [
-              { height: '100%', offset: 0 },
-              { height: '0', offset: 1 }];
+              { transform: 'translateY(0)', offset: 0 },
+              { transform: 'translateY(100%)', offset: 1 }];
             var timing = { duration: 300, iterations: 1, fill: 'forwards', easing: 'ease-out' };
 
             elem.animate(keyframes, timing).onfinish = function () {
@@ -48,12 +53,15 @@
 
         elem.classList.remove('hide');
 
+        if (!elem.animate) {
+            return;
+        }
+
         requestAnimationFrame(function () {
-            elem.style.display = 'block';
 
             var keyframes = [
-              { height: '0', offset: 0 },
-              { height: '100%', offset: 1 }];
+              { transform: 'translateY(100%)', offset: 0 },
+              { transform: 'translateY(0)', offset: 1 }];
             var timing = { duration: 300, iterations: 1, fill: 'forwards', easing: 'ease-out' };
             elem.animate(keyframes, timing);
         });
@@ -73,7 +81,7 @@
         var isSquare = className.indexOf('square') != -1;
 
         var parentName = isSmallItem || isMiniItem || isPortrait ? null : item.SeriesName;
-        var name = LibraryBrowser.getPosterViewDisplayName(item, true);
+        var name = itemHelper.getDisplayName(item);
 
         html += '<div style="margin-bottom:1em;">';
         var logoHeight = isSmallItem || isMiniItem ? 20 : 26;
@@ -110,27 +118,21 @@
             html += name;
             html += '</p>';
         } else if (!isSmallItem && !isMiniItem) {
-            html += '<p class="itemMiscInfo" style="white-space:nowrap;">';
-            html += LibraryBrowser.getMiscInfoHtml(item);
-            html += '</p>';
+            html += '<div class="itemMiscInfo">';
+            html += mediaInfo.getPrimaryMediaInfoHtml(item, {
+                endsAt: false
+            });
+            html += '</div>';
         }
 
         if (!isMiniItem) {
             html += '<div style="margin:1em 0 .75em;">';
 
             if (isPortrait) {
-                html += '<div class="itemCommunityRating">';
-                html += LibraryBrowser.getRatingHtml(item, false);
-                html += '</div>';
-
                 html += '<div class="userDataIcons" style="margin:.5em 0 0em;">';
                 html += LibraryBrowser.getUserDataIconsHtml(item);
                 html += '</div>';
             } else {
-
-                html += '<span class="itemCommunityRating" style="vertical-align:middle;">';
-                html += LibraryBrowser.getRatingHtml(item, false);
-                html += '</span>';
 
                 html += '<span class="userDataIcons" style="vertical-align:middle;">';
                 html += LibraryBrowser.getUserDataIconsHtml(item);
@@ -141,24 +143,22 @@
 
         html += '<div>';
 
-        var buttonMargin = isPortrait || isSquare ? "margin:0 4px 0 0;" : "margin:0 10px 0 0;";
-
         var buttonCount = 0;
 
         if (MediaController.canPlay(item)) {
 
             var resumePosition = (item.UserData || {}).PlaybackPositionTicks || 0;
 
-            html += '<paper-icon-button icon="play-circle-outline" class="btnPlayItem" data-itemid="' + item.Id + '" data-itemtype="' + item.Type + '" data-isfolder="' + item.IsFolder + '" data-mediatype="' + item.MediaType + '" data-resumeposition="' + resumePosition + '"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" class="btnPlayItem" data-itemid="' + item.Id + '" data-itemtype="' + item.Type + '" data-isfolder="' + item.IsFolder + '" data-mediatype="' + item.MediaType + '" data-resumeposition="' + resumePosition + '"><iron-icon icon="play-circle-outline"></iron-icon></button>';
             buttonCount++;
         }
 
         if (commands.indexOf('trailer') != -1) {
-            html += '<paper-icon-button icon="videocam" class="btnPlayTrailer" data-itemid="' + item.Id + '"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" class="btnPlayTrailer" data-itemid="' + item.Id + '"><iron-icon icon="videocam"></iron-icon></button>';
             buttonCount++;
         }
 
-        html += '<paper-icon-button icon="' + AppInfo.moreIcon + '" class="btnMoreCommands"></paper-icon-button>';
+        html += '<button is="paper-icon-button-light" class="btnMoreCommands"><iron-icon icon="' + AppInfo.moreIcon + '"></iron-icon></button>';
         buttonCount++;
 
         html += '</div>';
@@ -196,7 +196,7 @@
 
     function onMoreButtonClick() {
 
-        var card = $(this).parents('.card')[0];
+        var card = parentWithClass(this, 'card');
 
         showContextMenu(card, {
             showPlayOptions: false
@@ -221,6 +221,29 @@
         }
     }
 
+    function deleteTimer(id, itemsContainer) {
+
+        require(['confirm'], function (confirm) {
+
+            confirm(Globalize.translate('MessageConfirmRecordingCancellation'), Globalize.translate('HeaderConfirmRecordingCancellation')).then(function () {
+
+                Dashboard.showLoadingMsg();
+
+                ApiClient.cancelLiveTvTimer(id).then(function () {
+
+                    require(['toast'], function (toast) {
+                        toast(Globalize.translate('MessageRecordingCancelled'));
+                    });
+
+                    Dashboard.hideLoadingMsg();
+                    itemsContainer.dispatchEvent(new CustomEvent('timercancelled', {
+                        bubbles: true
+                    }));
+                });
+            });
+        });
+    }
+
     function showContextMenu(card, options) {
 
         var displayContextItem = card;
@@ -241,6 +264,7 @@
 
         var albumid = card.getAttribute('data-albumid');
         var artistid = card.getAttribute('data-artistid');
+        var serverId = ApiClient.serverInfo().Id;
 
         Dashboard.getCurrentUser().then(function (user) {
 
@@ -262,7 +286,7 @@
                 });
             }
 
-            if (user.Policy.EnableContentDownloading && AppInfo.supportsDownloading) {
+            if (user.Policy.EnableContentDownloading && appHost.supports('filedownload')) {
                 if (mediaType) {
                     items.push({
                         name: Globalize.translate('ButtonDownload'),
@@ -314,8 +338,16 @@
                 });
             }
 
+            if (itemType == 'Timer' && user.Policy.EnableLiveTvManagement) {
+                items.push({
+                    name: Globalize.translate('ButtonCancel'),
+                    id: 'canceltimer',
+                    ironIcon: 'cancel'
+                });
+            }
+
             items.push({
-                name: Globalize.translate('ButtonOpen'),
+                name: itemType == 'Timer' ? Globalize.translate('ButtonEdit') : Globalize.translate('ButtonOpen'),
                 id: 'open',
                 ironIcon: 'folder-open'
             });
@@ -338,7 +370,7 @@
                     }
                 }
 
-                if (mediaType == 'Video' && AppInfo.supportsExternalPlayers && AppSettings.enableExternalPlayers()) {
+                if (mediaType == 'Video' && AppInfo.supportsExternalPlayers && appSettings.enableExternalPlayers()) {
                     items.push({
                         name: Globalize.translate('ButtonPlayExternalPlayer'),
                         id: 'externalplayer',
@@ -411,7 +443,7 @@
                 });
             }
 
-            if (user.Policy.EnablePublicSharing) {
+            if (user.Policy.EnablePublicSharing && commands.indexOf('share') != -1) {
                 items.push({
                     name: Globalize.translate('ButtonShare'),
                     id: 'share',
@@ -468,22 +500,37 @@
                                 });
                                 break;
                             case 'playlist':
-                                PlaylistManager.showPanel([itemId]);
+                                require(['playlistManager'], function (playlistManager) {
+
+                                    playlistManager.showPanel([itemId]);
+                                });
                                 break;
                             case 'delete':
                                 LibraryBrowser.deleteItems([itemId]);
                                 break;
                             case 'download':
                                 {
-                                    var downloadHref = ApiClient.getUrl("Items/" + itemId + "/Download", {
-                                        api_key: ApiClient.accessToken()
+                                    require(['fileDownloader'], function (fileDownloader) {
+                                        var downloadHref = ApiClient.getUrl("Items/" + itemId + "/Download", {
+                                            api_key: ApiClient.accessToken()
+                                        });
+
+                                        fileDownloader.download([
+                                        {
+                                            url: downloadHref,
+                                            itemId: itemId,
+                                            serverId: serverId
+                                        }]);
                                     });
-                                    window.location.href = downloadHref;
 
                                     break;
                                 }
                             case 'edit':
-                                LibraryBrowser.editMetadata(itemId);
+                                if (itemType == 'Timer') {
+                                    LibraryBrowser.editTimer(itemId);
+                                } else {
+                                    LibraryBrowser.editMetadata(itemId);
+                                }
                                 break;
                             case 'refresh':
                                 ApiClient.refreshItem(itemId, {
@@ -494,6 +541,10 @@
                                     ReplaceAllImages: false,
                                     ReplaceAllMetadata: true
                                 });
+
+                                require(['toast'], function (toast) {
+                                    toast(Globalize.translate('MessageRefreshQueued'));
+                                });
                                 break;
                             case 'instantmix':
                                 MediaController.instantMix(itemId);
@@ -502,14 +553,18 @@
                                 MediaController.shuffle(itemId);
                                 break;
                             case 'open':
-                                Dashboard.navigate(href);
+                                if (itemType == 'Timer') {
+                                    LibraryBrowser.editTimer(itemId);
+                                } else {
+                                    Dashboard.navigate(href);
+                                }
                                 break;
                             case 'album':
                                 Dashboard.navigate('itemdetails.html?id=' + albumid);
                                 break;
                             case 'record':
-                                require(['components/recordingcreator/recordingcreator'], function (recordingcreator) {
-                                    recordingcreator.show(itemId);
+                                require(['recordingCreator'], function (recordingCreator) {
+                                    recordingCreator.show(itemId, serverId);
                                 });
                                 break;
                             case 'artist':
@@ -519,7 +574,7 @@
                                 MediaController.play(itemId);
                                 break;
                             case 'playallfromhere':
-                                playAllFromHere(index, $(card).parents('.itemsContainer'), 'play');
+                                playAllFromHere(index, parentWithClass(card, 'itemsContainer'), 'play');
                                 break;
                             case 'queue':
                                 MediaController.queue(itemId);
@@ -536,14 +591,16 @@
                                 });
                                 break;
                             case 'queueallfromhere':
-                                playAllFromHere(index, $(card).parents('.itemsContainer'), 'queue');
+                                playAllFromHere(index, parentWithClass(card, 'itemsContainer'), 'queue');
                                 break;
                             case 'sync':
-                                SyncManager.showMenu({
-                                    items: [
-                                    {
-                                        Id: itemId
-                                    }]
+                                require(['syncDialog'], function (syncDialog) {
+                                    syncDialog.showMenu({
+                                        items: [
+                                        {
+                                            Id: itemId
+                                        }]
+                                    });
                                 });
                                 break;
                             case 'editsubtitles':
@@ -555,9 +612,15 @@
                             case 'externalplayer':
                                 LibraryBrowser.playInExternalPlayer(itemId);
                                 break;
+                            case 'canceltimer':
+                                deleteTimer(itemId, $(card).parents('.itemsContainer')[0]);
+                                break;
                             case 'share':
-                                require(['sharingmanager'], function () {
-                                    SharingManager.showMenu(Dashboard.getCurrentUserId(), itemId);
+                                require(['sharingmanager'], function (sharingManager) {
+                                    sharingManager.showMenu({
+                                        serverId: serverId,
+                                        itemId: itemId
+                                    });
                                 });
                                 break;
                             case 'removefromplaylist':
@@ -651,7 +714,7 @@
             if (itemSelectionPanel) {
                 return onItemSelectionPanelClick(e, itemSelectionPanel);
             }
-            if (card.classList.contains('groupedCard')) {
+            else if (card.classList.contains('groupedCard')) {
                 return onGroupedCardClick(e, card);
             }
         }
@@ -710,7 +773,7 @@
         return elem;
     }
 
-    $.fn.createCardMenus = function (options) {
+    LibraryBrowser.createCardMenus = function (curr, options) {
 
         var preventHover = false;
 
@@ -797,32 +860,37 @@
             preventHover = true;
         }
 
+        curr.removeEventListener('click', onCardClick);
+        curr.addEventListener('click', onCardClick);
+
+        if (AppInfo.isTouchPreferred) {
+
+            curr.removeEventListener('contextmenu', disableEvent);
+            curr.addEventListener('contextmenu', disableEvent);
+        }
+        else {
+            curr.removeEventListener('contextmenu', onContextMenu);
+            curr.addEventListener('contextmenu', onContextMenu);
+
+            curr.removeEventListener('mouseenter', onHoverIn);
+            curr.addEventListener('mouseenter', onHoverIn, true);
+
+            curr.removeEventListener('mouseleave', onHoverOut);
+            curr.addEventListener('mouseleave', onHoverOut, true);
+
+            curr.removeEventListener("touchstart", preventTouchHover);
+            curr.addEventListener("touchstart", preventTouchHover);
+        }
+
+        initTapHoldMenus(curr);
+    };
+
+    $.fn.createCardMenus = function (options) {
+
         for (var i = 0, length = this.length; i < length; i++) {
 
             var curr = this[i];
-            curr.removeEventListener('click', onCardClick);
-            curr.addEventListener('click', onCardClick);
-
-            if (AppInfo.isTouchPreferred) {
-
-                curr.removeEventListener('contextmenu', disableEvent);
-                curr.addEventListener('contextmenu', disableEvent);
-            }
-            else {
-                curr.removeEventListener('contextmenu', onContextMenu);
-                curr.addEventListener('contextmenu', onContextMenu);
-
-                curr.removeEventListener('mouseenter', onHoverIn);
-                curr.addEventListener('mouseenter', onHoverIn, true);
-
-                curr.removeEventListener('mouseleave', onHoverOut);
-                curr.addEventListener('mouseleave', onHoverOut, true);
-
-                curr.removeEventListener("touchstart", preventTouchHover);
-                curr.addEventListener("touchstart", preventTouchHover);
-            }
-
-            initTapHoldMenus(curr);
+            LibraryBrowser.createCardMenus(curr, options);
         }
 
         return this;
@@ -866,7 +934,6 @@
             element.classList.add('hasTapHold');
 
             manager.on('press', onTapHold);
-            manager.on('pressup', onTapHoldUp);
         });
 
         showTapHoldHelp(element);
@@ -874,7 +941,7 @@
 
     function showTapHoldHelp(element) {
 
-        var page = $(element).parents('.page')[0];
+        var page = parentWithClass(element, 'page');
 
         if (!page) {
             return;
@@ -912,6 +979,7 @@
 
             showSelections(card);
 
+            // It won't have this if it's a hammer event
             if (e.stopPropagation) {
                 e.stopPropagation();
             }
@@ -919,25 +987,11 @@
             return false;
         }
         e.preventDefault();
-        e.stopPropagation();
-        return false;
-    }
-
-    function onTapHoldUp(e) {
-
-        var itemSelectionPanel = parentWithClass(e.target, 'itemSelectionPanel');
-
-        if (itemSelectionPanel) {
-            if (!parentWithClass(e.target, 'chkItemSelect')) {
-                var chkItemSelect = itemSelectionPanel.querySelector('.chkItemSelect');
-
-                if (chkItemSelect) {
-                    chkItemSelect.checked = !chkItemSelect.checked;
-                }
-            }
-            e.preventDefault();
-            return false;
+        // It won't have this if it's a hammer event
+        if (e.stopPropagation) {
+            e.stopPropagation();
         }
+        return false;
     }
 
     function onItemSelectionPanelClick(e, itemSelectionPanel) {
@@ -947,9 +1001,14 @@
             var chkItemSelect = itemSelectionPanel.querySelector('.chkItemSelect');
 
             if (chkItemSelect) {
-                var newValue = !chkItemSelect.checked;
-                chkItemSelect.checked = newValue;
-                updateItemSelection(chkItemSelect, newValue);
+
+                if (chkItemSelect.classList.contains('checkedInitial')) {
+                    chkItemSelect.classList.remove('checkedInitial');
+                } else {
+                    var newValue = !chkItemSelect.checked;
+                    chkItemSelect.checked = newValue;
+                    updateItemSelection(chkItemSelect, newValue);
+                }
             }
         }
 
@@ -962,7 +1021,7 @@
         updateItemSelection(this, this.checked);
     }
 
-    function showSelection(item) {
+    function showSelection(item, isChecked) {
 
         var itemSelectionPanel = item.querySelector('.itemSelectionPanel');
 
@@ -973,12 +1032,16 @@
 
             item.querySelector('.cardContent').appendChild(itemSelectionPanel);
 
-            var chkItemSelect = document.createElement('paper-checkbox');
-            chkItemSelect.classList.add('chkItemSelect');
-
-            $(chkItemSelect).on('change', onSelectionChange);
-
-            itemSelectionPanel.appendChild(chkItemSelect);
+            var cssClass = 'chkItemSelect';
+            if (isChecked && !browserInfo.firefox) {
+                // In firefox, the initial tap hold doesnt' get treated as a click
+                // In other browsers it does, so we need to make sure that initial click is ignored
+                cssClass += ' checkedInitial';
+            }
+            var checkedAttribute = isChecked ? ' checked' : '';
+            itemSelectionPanel.innerHTML = '<paper-checkbox class="' + cssClass + '"' + checkedAttribute + '></paper-checkbox>';
+            var chkItemSelect = itemSelectionPanel.querySelector('paper-checkbox');
+            chkItemSelect.addEventListener('change', onSelectionChange);
         }
     }
 
@@ -996,11 +1059,11 @@
             var html = '';
 
             html += '<div style="float:left;">';
-            html += '<paper-icon-button class="btnCloseSelectionPanel" icon="close"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" class="btnCloseSelectionPanel"><iron-icon icon="close"></iron-icon></button>';
             html += '<span class="itemSelectionCount"></span>';
             html += '</div>';
 
-            html += '<paper-icon-button class="btnSelectionPanelOptions" icon="more-vert" style="margin-left:auto;"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" class="btnSelectionPanelOptions" style="margin-left:auto;"><iron-icon icon="more-vert"></iron-icon></button>';
 
             selectionCommandsPanel.innerHTML = html;
 
@@ -1030,7 +1093,10 @@
           { transform: 'translate3d(-10px, 0, 0)', offset: 0.9 },
           { transform: 'translate3d(0, 0, 0)', offset: 1 }];
         var timing = { duration: 900, iterations: iterations };
-        return elem.animate(keyframes, timing);
+
+        if (elem.animate) {
+            elem.animate(keyframes, timing);
+        }
     }
 
     function showSelections(initialCard) {
@@ -1038,11 +1104,10 @@
         require(['paper-checkbox'], function () {
             var cards = document.querySelectorAll('.card');
             for (var i = 0, length = cards.length; i < length; i++) {
-                showSelection(cards[i]);
+                showSelection(cards[i], initialCard == cards[i]);
             }
 
             showSelectionCommands();
-            initialCard.querySelector('.chkItemSelect').checked = true;
             updateItemSelection(initialCard, true);
         });
     }
@@ -1119,7 +1184,7 @@
                 });
             }
 
-            if (user.Policy.EnableContentDownloading && AppInfo.supportsDownloading) {
+            if (user.Policy.EnableContentDownloading && appHost.supports('filedownload')) {
                 //items.push({
                 //    name: Globalize.translate('ButtonDownload'),
                 //    id: 'download',
@@ -1131,6 +1196,16 @@
                 name: Globalize.translate('HeaderGroupVersions'),
                 id: 'groupvideos',
                 ironIcon: 'call-merge'
+            });
+
+            items.push({
+                name: Globalize.translate('MarkPlayed'),
+                id: 'markplayed'
+            });
+
+            items.push({
+                name: Globalize.translate('MarkUnplayed'),
+                id: 'markunplayed'
             });
 
             items.push({
@@ -1164,17 +1239,32 @@
                                 hideSelections();
                                 break;
                             case 'playlist':
-                                PlaylistManager.showPanel(items);
-                                hideSelections();
+                                require(['playlistManager'], function (playlistManager) {
+
+                                    playlistManager.showPanel(items);
+                                    hideSelections();
+                                });
                                 break;
                             case 'delete':
                                 LibraryBrowser.deleteItems(items).then(function () {
-                                    Dashboard.navigate('index.html');
+                                    Dashboard.navigate('home.html');
                                 });
                                 hideSelections();
                                 break;
                             case 'groupvideos':
-                                combineVersions($($.mobile.activePage)[0], items);
+                                combineVersions($.mobile.activePage, items);
+                                break;
+                            case 'markplayed':
+                                items.forEach(function (itemId) {
+                                    ApiClient.markPlayed(Dashboard.getCurrentUserId(), itemId);
+                                });
+                                hideSelections();
+                                break;
+                            case 'markunplayed':
+                                items.forEach(function (itemId) {
+                                    ApiClient.markUnplayed(Dashboard.getCurrentUserId(), itemId);
+                                });
+                                hideSelections();
                                 break;
                             case 'refresh':
                                 items.map(function (itemId) {
@@ -1190,15 +1280,21 @@
                                     });
 
                                 });
+
+                                require(['toast'], function (toast) {
+                                    toast(Globalize.translate('MessageRefreshQueued'));
+                                });
                                 hideSelections();
                                 break;
                             case 'sync':
-                                SyncManager.showMenu({
-                                    items: items.map(function (i) {
-                                        return {
-                                            Id: i
-                                        };
-                                    })
+                                require(['syncDialog'], function (syncDialog) {
+                                    syncDialog.showMenu({
+                                        items: items.map(function (i) {
+                                            return {
+                                                Id: i
+                                            };
+                                        })
+                                    });
                                 });
                                 hideSelections();
                                 break;
@@ -1226,9 +1322,9 @@
 
         var msg = Globalize.translate('MessageTheSelectedItemsWillBeGrouped');
 
-        Dashboard.confirm(msg, Globalize.translate('HeaderGroupVersions'), function (confirmResult) {
+        require(['confirm'], function (confirm) {
 
-            if (confirmResult) {
+            confirm(msg, Globalize.translate('HeaderGroupVersions')).then(function () {
 
                 Dashboard.showLoadingMsg();
 
@@ -1243,7 +1339,7 @@
                     hideSelections();
                     $('.itemsContainer', page).trigger('needsrefresh');
                 });
-            }
+            });
         });
     }
 
@@ -1276,13 +1372,22 @@
 
             index = elemWithAttributes.getAttribute('data-index');
 
-            itemsContainer = $(elem).parents('.itemsContainer');
+            itemsContainer = parentWithClass(elem, 'itemsContainer');
 
             playAllFromHere(index, itemsContainer, 'play');
         }
         else if (action == 'instantmix') {
 
             MediaController.instantMix(itemId);
+        }
+        else if (action == 'edit') {
+
+            var itemType = elemWithAttributes.getAttribute('data-itemtype');
+            if (itemType == 'Timer') {
+                LibraryBrowser.editTimer(itemId);
+            } else {
+                LibraryBrowser.editMetadata(itemId);
+            }
         }
 
         e.stopPropagation();
@@ -1319,6 +1424,41 @@
         });
     }
 
+    function showSyncButtonsPerUser(page) {
+
+        var apiClient = window.ApiClient;
+
+        if (!apiClient || !apiClient.getCurrentUserId()) {
+            return;
+        }
+
+        Dashboard.getCurrentUser().then(function (user) {
+
+            var item = {
+                SupportsSync: true
+            };
+
+            if (LibraryBrowser.enableSync(item, user)) {
+                $('.categorySyncButton', page).removeClass('hide');
+            } else {
+                $('.categorySyncButton', page).addClass('hide');
+            }
+        });
+    }
+
+    function onCategorySyncButtonClick(page, button) {
+
+        var category = button.getAttribute('data-category');
+        var parentId = LibraryMenu.getTopParentId();
+
+        require(['syncDialog'], function (syncDialog) {
+            syncDialog.showMenu({
+                ParentId: parentId,
+                Category: category
+            });
+        });
+    }
+
     pageClassOn('pageinit', "libraryPage", function () {
 
         var page = this;
@@ -1327,9 +1467,23 @@
 
         var itemsContainers = page.querySelectorAll('.itemsContainer:not(.noautoinit)');
         for (var i = 0, length = itemsContainers.length; i < length; i++) {
-            $(itemsContainers[i]).createCardMenus();
+            LibraryBrowser.createCardMenus(itemsContainers[i]);
         }
 
+        $('.categorySyncButton', page).on('click', function () {
+
+            onCategorySyncButtonClick(page, this);
+        });
+
+    });
+
+    pageClassOn('pageshow', "libraryPage", function () {
+
+        var page = this;
+
+        if (!Dashboard.isServerlessPage()) {
+            showSyncButtonsPerUser(page);
+        }
     });
 
     pageClassOn('pagebeforehide', "libraryPage", function () {
@@ -1394,7 +1548,7 @@
             if (mediaType == 'Video') {
                 this.setAttribute('data-positionticks', (userData.PlaybackPositionTicks || 0));
 
-                if ($(this).hasClass('card')) {
+                if (this.classList.contains('card')) {
                     renderUserDataChanges(this, userData);
                 }
             }
@@ -1437,4 +1591,4 @@
     Events.on(ConnectionManager, 'localusersignedin', clearRefreshTimes);
     Events.on(ConnectionManager, 'localusersignedout', clearRefreshTimes);
 
-})(jQuery, document, window);
+});

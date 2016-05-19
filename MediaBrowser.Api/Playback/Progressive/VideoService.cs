@@ -1,4 +1,3 @@
-using MediaBrowser.Common.IO;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Devices;
@@ -10,9 +9,9 @@ using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Serialization;
 using ServiceStack;
 using System;
-using System.Globalization;
 using System.IO;
 using CommonIO;
+using MediaBrowser.Model.Dlna;
 
 namespace MediaBrowser.Api.Playback.Progressive
 {
@@ -36,6 +35,7 @@ namespace MediaBrowser.Api.Playback.Progressive
     [Route("/Videos/{Id}/stream.wmv", "GET")]
     [Route("/Videos/{Id}/stream.wtv", "GET")]
     [Route("/Videos/{Id}/stream.mov", "GET")]
+    [Route("/Videos/{Id}/stream.iso", "GET")]
     [Route("/Videos/{Id}/stream", "GET")]
     [Route("/Videos/{Id}/stream.ts", "HEAD")]
     [Route("/Videos/{Id}/stream.webm", "HEAD")]
@@ -53,6 +53,7 @@ namespace MediaBrowser.Api.Playback.Progressive
     [Route("/Videos/{Id}/stream.wtv", "HEAD")]
     [Route("/Videos/{Id}/stream.m2ts", "HEAD")]
     [Route("/Videos/{Id}/stream.mov", "HEAD")]
+    [Route("/Videos/{Id}/stream.iso", "HEAD")]
     [Route("/Videos/{Id}/stream", "HEAD")]
     [Api(Description = "Gets a video stream")]
     public class GetVideoStream : VideoStreamRequest
@@ -65,7 +66,8 @@ namespace MediaBrowser.Api.Playback.Progressive
     /// </summary>
     public class VideoService : BaseProgressiveStreamingService
     {
-        public VideoService(IServerConfigurationManager serverConfig, IUserManager userManager, ILibraryManager libraryManager, IIsoManager isoManager, IMediaEncoder mediaEncoder, IFileSystem fileSystem, IDlnaManager dlnaManager, ISubtitleEncoder subtitleEncoder, IDeviceManager deviceManager, IMediaSourceManager mediaSourceManager, IZipClient zipClient, IJsonSerializer jsonSerializer, IImageProcessor imageProcessor, IHttpClient httpClient) : base(serverConfig, userManager, libraryManager, isoManager, mediaEncoder, fileSystem, dlnaManager, subtitleEncoder, deviceManager, mediaSourceManager, zipClient, jsonSerializer, imageProcessor, httpClient)
+        public VideoService(IServerConfigurationManager serverConfig, IUserManager userManager, ILibraryManager libraryManager, IIsoManager isoManager, IMediaEncoder mediaEncoder, IFileSystem fileSystem, IDlnaManager dlnaManager, ISubtitleEncoder subtitleEncoder, IDeviceManager deviceManager, IMediaSourceManager mediaSourceManager, IZipClient zipClient, IJsonSerializer jsonSerializer, IImageProcessor imageProcessor, IHttpClient httpClient)
+            : base(serverConfig, userManager, libraryManager, isoManager, mediaEncoder, fileSystem, dlnaManager, subtitleEncoder, deviceManager, mediaSourceManager, zipClient, jsonSerializer, imageProcessor, httpClient)
         {
         }
 
@@ -135,21 +137,18 @@ namespace MediaBrowser.Api.Playback.Progressive
                 args += " -mpegts_m2ts_mode 1";
             }
 
-            var isOutputMkv = string.Equals(state.OutputContainer, "mkv", StringComparison.OrdinalIgnoreCase);
-
-            if (state.RunTimeTicks.HasValue)
-            {
-                //args += " -copyts -avoid_negative_ts disabled -start_at_zero";
-            }
-            
             if (string.Equals(videoCodec, "copy", StringComparison.OrdinalIgnoreCase))
             {
-                if (state.VideoStream != null && IsH264(state.VideoStream) &&
-                    (string.Equals(state.OutputContainer, "ts", StringComparison.OrdinalIgnoreCase) || isOutputMkv))
+                if (state.VideoStream != null && IsH264(state.VideoStream) && string.Equals(state.OutputContainer, "ts", StringComparison.OrdinalIgnoreCase) && !string.Equals(state.VideoStream.NalLengthSize, "0", StringComparison.OrdinalIgnoreCase))
                 {
                     args += " -bsf:v h264_mp4toannexb";
                 }
 
+                if (state.RunTimeTicks.HasValue && state.VideoRequest.CopyTimestamps)
+                {
+                    args += " -copyts -avoid_negative_ts disabled -start_at_zero";
+                }
+                
                 return args;
             }
 
@@ -158,12 +157,24 @@ namespace MediaBrowser.Api.Playback.Progressive
 
             args += keyFrameArg;
 
-            var hasGraphicalSubs = state.SubtitleStream != null && !state.SubtitleStream.IsTextSubtitleStream;
+            var hasGraphicalSubs = state.SubtitleStream != null && !state.SubtitleStream.IsTextSubtitleStream && state.VideoRequest.SubtitleMethod == SubtitleDeliveryMethod.Encode;
 
+            var hasCopyTs = false;
             // Add resolution params, if specified
             if (!hasGraphicalSubs)
             {
-                args += GetOutputSizeParam(state, videoCodec);
+                var outputSizeParam = GetOutputSizeParam(state, videoCodec);
+                args += outputSizeParam;
+                hasCopyTs = outputSizeParam.IndexOf("copyts", StringComparison.OrdinalIgnoreCase) != -1;
+            }
+
+            if (state.RunTimeTicks.HasValue && state.VideoRequest.CopyTimestamps)
+            {
+                if (!hasCopyTs)
+                {
+                    args += " -copyts";
+                }
+                args += " -avoid_negative_ts disabled -start_at_zero";
             }
 
             var qualityParam = GetVideoQualityParam(state, videoCodec);

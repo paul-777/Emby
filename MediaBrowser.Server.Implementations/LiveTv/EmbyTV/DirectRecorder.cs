@@ -23,7 +23,12 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
             _fileSystem = fileSystem;
         }
 
-        public async Task Record(MediaSourceInfo mediaSource, string targetFile, Action onStarted, CancellationToken cancellationToken)
+        public string GetOutputPath(MediaSourceInfo mediaSource, string targetFile)
+        {
+            return targetFile;
+        }
+
+        public async Task Record(MediaSourceInfo mediaSource, string targetFile, TimeSpan duration, Action onStarted, CancellationToken cancellationToken)
         {
             var httpRequestOptions = new HttpRequestOptions()
             {
@@ -40,11 +45,27 @@ namespace MediaBrowser.Server.Implementations.LiveTv.EmbyTV
                 {
                     onStarted();
 
-                    _logger.Info("Copying recording stream to file stream");
+                    _logger.Info("Copying recording stream to file {0}", targetFile);
+
+                    if (mediaSource.RunTimeTicks.HasValue)
+                    {
+                        // The media source already has a fixed duration
+                        // But add another stop 1 minute later just in case the recording gets stuck for any reason
+                        var durationToken = new CancellationTokenSource(duration.Add(TimeSpan.FromMinutes(1)));
+                        cancellationToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, durationToken.Token).Token;
+                    }
+                    else
+                    {
+                        // The media source if infinite so we need to handle stopping ourselves
+                        var durationToken = new CancellationTokenSource(duration);
+                        cancellationToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, durationToken.Token).Token;
+                    }
 
                     await response.Content.CopyToAsync(output, StreamDefaults.DefaultCopyToBufferSize, cancellationToken).ConfigureAwait(false);
                 }
             }
+
+            _logger.Info("Recording completed to file {0}", targetFile);
         }
     }
 }

@@ -3,7 +3,6 @@ using MediaBrowser.Common.ScheduledTasks;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Logging;
@@ -33,7 +32,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
         private readonly ILocalizationManager _localization;
         private readonly ITaskManager _taskManager;
 
-        public const int MigrationVersion = 20;
+        public const int MigrationVersion = 23;
         public static bool EnableUnavailableMessage = false;
 
         public CleanDatabaseScheduledTask(ILibraryManager libraryManager, IItemRepository itemRepo, ILogger logger, IServerConfigurationManager config, IFileSystem fileSystem, IHttpServer httpServer, ILocalizationManager localization, ITaskManager taskManager)
@@ -86,7 +85,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
             innerProgress = new ActionableProgress<double>();
             innerProgress.RegisterAction(p =>
             {
-                double newPercentCommplete = 40 + (.05 * p);
+                double newPercentCommplete = 40 + .05 * p;
                 OnProgress(newPercentCommplete);
                 progress.Report(newPercentCommplete);
             });
@@ -96,7 +95,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
             innerProgress = new ActionableProgress<double>();
             innerProgress.RegisterAction(p =>
             {
-                double newPercentCommplete = 45 + (.55 * p);
+                double newPercentCommplete = 45 + .55 * p;
                 OnProgress(newPercentCommplete);
                 progress.Report(newPercentCommplete);
             });
@@ -108,6 +107,12 @@ namespace MediaBrowser.Server.Implementations.Persistence
             if (_config.Configuration.MigrationVersion < MigrationVersion)
             {
                 _config.Configuration.MigrationVersion = MigrationVersion;
+                _config.SaveConfiguration();
+            }
+
+            if (_config.Configuration.SchemaVersion < SqliteItemRepository.LatestSchemaVersion)
+            {
+                _config.Configuration.SchemaVersion = SqliteItemRepository.LatestSchemaVersion;
                 _config.SaveConfiguration();
             }
 
@@ -208,7 +213,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
                     await item.Delete(new DeleteOptions
                     {
                         DeleteFileLocation = false
-                        
+
                     }).ConfigureAwait(false);
                 }
 
@@ -225,7 +230,7 @@ namespace MediaBrowser.Server.Implementations.Persistence
         {
             var result = _itemRepo.GetItemIdsWithPath(new InternalItemsQuery
             {
-                LocationType = LocationType.FileSystem,
+                LocationTypes = new[] { LocationType.FileSystem },
                 //Limit = limit,
 
                 // These have their own cleanup routines
@@ -266,6 +271,19 @@ namespace MediaBrowser.Server.Implementations.Persistence
                         continue;
                     }
 
+                    var hasDualAccess = libraryItem as IHasDualAccess;
+                    if (hasDualAccess != null && hasDualAccess.IsAccessedByName)
+                    {
+                        continue;
+                    }
+
+                    var libraryItemPath = libraryItem.Path;
+                    if (!string.Equals(libraryItemPath, path, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.Error("CleanDeletedItems aborting delete for item {0}-{1} because paths don't match. {2}---{3}", libraryItem.Id, libraryItem.Name, libraryItem.Path ?? string.Empty, path ?? string.Empty);
+                        continue;
+                    }
+
                     if (Folder.IsPathOffline(path))
                     {
                         libraryItem.IsOffline = true;
@@ -273,13 +291,9 @@ namespace MediaBrowser.Server.Implementations.Persistence
                         continue;
                     }
 
-                    _logger.Info("Deleting item from database {0} because path no longer exists. type: {1} path: {2}", libraryItem.Name, libraryItem.GetType().Name, libraryItem.Path ?? string.Empty);
+                    _logger.Info("Deleting item from database {0} because path no longer exists. type: {1} path: {2}", libraryItem.Name, libraryItem.GetType().Name, libraryItemPath ?? string.Empty);
 
-                    await libraryItem.Delete(new DeleteOptions
-                    {
-                        DeleteFileLocation = false
-
-                    }).ConfigureAwait(false);
+                    await libraryItem.OnFileDeleted().ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {

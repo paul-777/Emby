@@ -1,8 +1,6 @@
 ﻿using DvdLib.Ifo;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Model.Dlna;
-using MediaBrowser.Model.Extensions;
-using MediaBrowser.Common.IO;
 using MediaBrowser.Controller.Chapters;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
@@ -383,6 +381,11 @@ namespace MediaBrowser.Providers.MediaInfo
                 }
             }
 
+            if (!string.IsNullOrWhiteSpace(data.OfficialRatingDescription) || isFullRefresh)
+            {
+                video.OfficialRatingDescription = data.OfficialRatingDescription;
+            }
+
             if (!video.LockedFields.Contains(MetadataFields.Genres))
             {
                 if (video.Genres.Count == 0 || isFullRefresh)
@@ -437,6 +440,17 @@ namespace MediaBrowser.Providers.MediaInfo
                     video.ParentIndexNumber = data.ParentIndexNumber;
                 }
             }
+            if (!string.IsNullOrWhiteSpace(data.Name))
+            {
+                if (string.IsNullOrWhiteSpace(video.Name) || string.Equals(video.Name, Path.GetFileNameWithoutExtension(video.Path), StringComparison.OrdinalIgnoreCase))
+                {
+                    // Don't use the embedded name for extras because it will often be the same name as the movie
+                    if (!video.ExtraType.HasValue && !video.IsOwnedItem)
+                    {
+                        video.Name = data.Name;
+                    }
+                }
+            }
 
             // If we don't have a ProductionYear try and get it from PremiereDate
             if (video.PremiereDate.HasValue && !video.ProductionYear.HasValue)
@@ -450,6 +464,11 @@ namespace MediaBrowser.Providers.MediaInfo
                 {
                     video.Overview = data.Overview;
                 }
+            }
+
+            if (string.IsNullOrWhiteSpace(video.ShortOverview) || isFullRefresh)
+            {
+                video.ShortOverview = data.ShortOverview;
             }
         }
 
@@ -515,8 +534,9 @@ namespace MediaBrowser.Providers.MediaInfo
                     _subtitleManager)
                     .DownloadSubtitles(video,
                     currentStreams.Concat(externalSubtitleStreams).ToList(),
-                    subtitleOptions.SkipIfGraphicalSubtitlesPresent,
+                    subtitleOptions.SkipIfEmbeddedSubtitlesPresent,
                     subtitleOptions.SkipIfAudioTrackMatches,
+                    subtitleOptions.RequirePerfectMatch,
                     subtitleOptions.DownloadLanguages,
                     cancellationToken).ConfigureAwait(false);
 

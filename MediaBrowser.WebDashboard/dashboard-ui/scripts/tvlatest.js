@@ -1,28 +1,22 @@
-﻿(function ($, document) {
+﻿define([], function () {
 
     function getView() {
 
         return 'Thumb';
     }
 
-    function loadLatest(page) {
+    function loadLatest(context, params) {
 
         Dashboard.showLoadingMsg();
 
         var userId = Dashboard.getCurrentUserId();
 
-        var parentId = LibraryMenu.getTopParentId();
-
-        var limit = 30;
-
-        if (AppInfo.hasLowImageBandwidth) {
-            limit = 16;
-        }
+        var parentId = params.topParentId;
 
         var options = {
 
             IncludeItemTypes: "Episode",
-            Limit: limit,
+            Limit: 30,
             Fields: "PrimaryImageAspectRatio,SyncInfo",
             ParentId: parentId,
             ImageTypeLimit: 1,
@@ -68,20 +62,20 @@
                 });
             }
 
-            var elem = page.querySelector('#latestEpisodes');
+            var elem = context.querySelector('#latestEpisodes');
             elem.innerHTML = html;
             ImageLoader.lazyChildren(elem);
 
             Dashboard.hideLoadingMsg();
-            LibraryBrowser.setLastRefreshed(page);
         });
     }
+    return function (view, params, tabContent) {
 
-    window.TvPage.renderLatestTab = function (page, tabContent) {
+        var self = this;
 
-        if (LibraryBrowser.needsRefresh(tabContent)) {
-            loadLatest(tabContent);
-        }
+        self.renderTab = function() {
+
+            loadLatest(tabContent, params);
+        };
     };
-
-})(jQuery, document);
+});

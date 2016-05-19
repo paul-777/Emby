@@ -9,7 +9,6 @@ using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace MediaBrowser.Server.Implementations.Activity
@@ -28,11 +27,11 @@ namespace MediaBrowser.Server.Implementations.Activity
             _appPaths = appPaths;
         }
 
-        public async Task Initialize()
+        public async Task Initialize(IDbConnector dbConnector)
         {
             var dbFile = Path.Combine(_appPaths.DataPath, "activitylog.db");
 
-            _connection = await SqliteExtensions.ConnectToDb(dbFile, Logger).ConfigureAwait(false);
+            _connection = await dbConnector.Connect(dbFile).ConfigureAwait(false);
 
             string[] queries = {
 

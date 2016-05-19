@@ -86,25 +86,12 @@ each error is categorized by :
     - ```Hls.ErrorTypes.MEDIA_ERROR```for media/video related errors
     - ```Hls.ErrorTypes.OTHER_ERROR```for all other errors
   - its details:
-    - ```Hls.ErrorDetails.MANIFEST_LOAD_ERROR```raised when manifest loading fails because of a network error
-    - ```Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT```raised when manifest loading fails because of a timeout
-    - ```Hls.ErrorDetails.MANIFEST_PARSING_ERROR```raised when manifest parsing failed to find proper content
-    - ```Hls.ErrorDetails.LEVEL_LOAD_ERROR```raised when level loading fails because of a network error
-    - ```Hls.ErrorDetails.LEVEL_LOAD_TIMEOUT```raised when level loading fails because of a timeout
-    - ```Hls.ErrorDetails.LEVEL_SWITCH_ERROR```raised when level switching fails
-    - ```Hls.ErrorDetails.FRAG_LOAD_ERROR```raised when fragment loading fails because of a network error
-    - ```Hls.ErrorDetails.FRAG_LOOP_LOADING_ERROR```raised upon detection of same fragment being requested in loop
-    - ```Hls.ErrorDetails.FRAG_LOAD_TIMEOUT```raised when fragment loading fails because of a timeout
-    - ```Hls.ErrorDetails.FRAG_DECRYPT_ERROR```raised when fragment decryption fails
-    - ```Hls.ErrorDetails.FRAG_PARSING_ERROR```raised when fragment parsing fails
-    - ```Hls.ErrorDetails.BUFFER_APPEND_ERROR```raised when exception is raised while preparing buffer append
-    - ```Hls.ErrorDetails.BUFFER_APPENDING_ERROR```raised when exception is raised during buffer appending
-    - ```Hls.ErrorDetails.BUFFER_STALLED_ERROR```raised when playback stalls because the buffer runs out
+    - refer to [Errors details](#Errors)
   - its fatality:
     - ```false```if error is not fatal, hls.js will try to recover it
     - ```true```if error is fatal, an action is required to (try to) recover it.
 
- full details is described [below](##Errors)
+ full details is described [below](#Errors)
 
 
  see sample code below to listen to errors:
@@ -182,14 +169,17 @@ configuration parameters could be provided to hls.js upon instantiation of Hls O
 ```js
 
    var config = {
-      debug : false,
       autoStartLoad : true,
+      capLevelToPlayerSize: false,
+      debug : false,
       defaultAudioCodec : undefined,
       maxBufferLength : 30,
       maxMaxBufferLength : 600,
       maxBufferSize : 60*1000*1000,
       maxBufferHole : 0.3,
       maxSeekHole : 2,
+      seekHoleNudgeDuration : 0.01,
+      maxFragLookUpTolerance : 0.2,
       liveSyncDurationCount : 3,
       liveMaxLatencyDurationCount: 10,
       enableWorker : true,
@@ -203,8 +193,7 @@ configuration parameters could be provided to hls.js upon instantiation of Hls O
       fragLoadingTimeOut : 20000,
       fragLoadingMaxRetry : 6,
       fragLoadingRetryDelay : 500,
-      fpsDroppedMonitoringPeriod : 5000,
-      fpsDroppedMonitoringThreshold : 0.2,
+      startFragPrefech : false,
       appendErrorMaxRetry : 3,
       loader : customLoader,
       fLoader: customFragmentLoader,
@@ -223,6 +212,12 @@ var hls = new Hls(config);
 this getter/setter allows to retrieve and override Hls default configuration.
 this configuration will be applied by default to all instances.
 
+#### ```capLevelToPlayerSize```
+ (default false)
+ 
+  - if set to true, the adaptive algorithm with limit levels usable in auto-quality by the HTML video element dimensions (width and height)
+  - if set to false, levels will not be limited. All available levels could be used in auto-quality mode taking only bandwidth into consideration.
+ 
 #### ```debug```
 (default false)
 
@@ -258,7 +253,7 @@ this is the guaranteed buffer length hls.js will try to reach, regardless of max
 #### ```maxBufferHole```
 (default 0.3s)
 
-'maximum' inter-fragment buffer hole tolerance that hls.js can cope with.
+'maximum' inter-fragment buffer hole tolerance that hls.js can cope with when searching for the next fragment to load.
 When switching between quality level, fragments might not be perfectly aligned.
 This could result in small overlapping or hole in media buffer. This tolerance factor helps cope with this.
 
@@ -268,6 +263,32 @@ This could result in small overlapping or hole in media buffer. This tolerance f
 in case playback is stalled, and a buffered range is available upfront, less than maxSeekHole seconds from current media position,
 hls.js will jump over this buffer hole to reach the beginning of this following buffered range.
 ```maxSeekHole``` allows to configure this jumpable threshold.
+
+
+#### ```seekHoleNudgeDuration```
+(default 0.01s)
+
+ in case playback is still stalling although a seek over buffer hole just occured, hls.js will seek to next buffer start + (nb of consecutive stalls * seekHoleNudgeDuration to try to restore playback
+
+
+#### ```maxFragLookUpTolerance```
+(default 0.2s)
+
+this tolerance factor is used during fragment lookup.
+instead of checking whether buffered.end is located within [start, end] range, frag lookup will be done by checking  within [start-maxFragLookUpTolerance, end-maxFragLookUpTolerance] range
+
+this tolerance factor is used to cope with situations like
+buffered.end = 9.991
+frag[Ø] : [0,10]
+frag[1] : [10,20]
+=> buffered.end is within frag[0] range, but as we are close to frag[1], frag[1] should be choosen instead
+
+
+if maxFragLookUpTolerance=0.2, 
+this lookup will be adjusted to 
+frag[Ø] : [-0.2,9.8]
+frag[1] : [9.8,19.8]
+=> this time, buffered.end is within frag[1] range, and frag[1] will be the next fragment to be loaded, as expected.
 
 #### ```maxMaxBufferLength```
 (default 600s)
@@ -296,6 +317,23 @@ if set to 10, the player will seek back to ```liveSyncDurationCount``` whenever 
 If set, this value must be stricly superior to ```liveSyncDurationCount```
 a value too close from ```liveSyncDurationCount``` is likely to cause playback stalls.
 
+#### ```liveSyncDuration```
+(default undefined)
+
+Alternative parameter to ```liveSyncDurationCount```, expressed in seconds vs number of segments.
+If defined in the configuration object, ```liveSyncDuration``` will take precedence over the default```liveSyncDurationCount```.
+You can't define this parameter and either ```liveSyncDurationCount``` or ```liveMaxLatencyDurationCount``` in your configuration object at the same time.
+A value too low (inferior to ~3 segment durations) is likely to cause playback stalls.
+
+#### ```liveMaxLatencyDuration```
+(default undefined)
+
+Alternative parameter to ```liveMaxLatencyDurationCount```, expressed in seconds vs number of segments.
+If defined in the configuration object, ```liveMaxLatencyDuration``` will take precedence over the default```liveMaxLatencyDurationCount```.
+If set, this value must be stricly superior to ```liveSyncDuration``` which must be defined as well.
+You can't define this parameter and either ```liveSyncDurationCount``` or ```liveMaxLatencyDurationCount``` in your configuration object at the same time.
+A value too close from ```liveSyncDuration``` is likely to cause playback stalls.
+
 #### ```enableWorker```
 (default true)
 
@@ -323,6 +361,11 @@ max nb of load retry
 initial delay between XmlHttpRequest error and first load retry (in ms)
 any I/O error will trigger retries every 500ms,1s,2s,4s,8s, ... capped to 64s (exponential backoff)
 
+prefetch start fragment although media not attached
+#### ```startFragPrefetch```
+(default false)
+
+start prefetching start fragment although media not attached yet
 
 max nb of append retry
 #### ```appendErrorMaxRetry```
@@ -356,7 +399,7 @@ var customLoader = function() {
   maxRetry : max nb of load retry
   retryDelay : delay between an I/O error and following connection retry (ms). this to avoid spamming the server.
   */
-  this.load = function(url,responseType,onSuccess,onError,timeout,maxRetry,retryDelay) {}
+  this.load = function(url,responseType,onSuccess,onError,onTimeOut,timeout,maxRetry,retryDelay) {}
 
   /* abort any loading in progress */
   this.abort = function() {}
@@ -474,6 +517,12 @@ get : return last loaded fragment quality level.
 set : set quality level for next loaded fragment
 set to -1 for automatic level selection
 
+#### ```hls.nextLoadLevel```
+get : return quality level that will be used to load next fragment
+
+set : force quality level for next loaded fragment. quality level will be forced only for that fragment.
+after a fragment at this quality level has been loaded, ```hls.loadLevel``` will prevail.
+
 #### ```hls.firstLevel```
 
 get :  first level index (index of first level appearing in Manifest. it is usually defined as start level hint for player)
@@ -507,6 +556,8 @@ however if ```config.autoStartLoad``` is set to ```false```, the following metho
 #### ```hls.startLoad()```
 start/restart playlist/fragment loading. this is only effective if MANIFEST_PARSED event has been triggered and video element has been attached to hls object.
 
+#### ```hls.stopLoad()```
+stop playlist/fragment loading. could be resumed later on by calling ```hls.startLoad()```
 
 ## Runtime Events
 
@@ -578,6 +629,8 @@ full list of Events available below :
 
 full list of Errors is described below:
 
+
+### Network Errors
   - ```Hls.ErrorDetails.MANIFEST_LOAD_ERROR``` - raised when manifest loading fails because of a network error
     - data: { type : ```NETWORK_ERROR```, details : ```Hls.ErrorDetails.MANIFEST_LOAD_ERROR```, fatal : ```true```,url : manifest URL, response : xhr response, loader : URL loader}
   - ```Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT``` - raised when manifest loading fails because of a timeout
@@ -598,10 +651,21 @@ full list of Errors is described below:
     - data: { type : ```NETWORK_ERROR```, details : ```Hls.ErrorDetails.FRAG_LOAD_TIMEOUT```, fatal : ```true/false```,frag : fragment object}
   - ```Hls.ErrorDetails.FRAG_PARSING_ERROR```raised when fragment parsing fails
     - data: { type : ```NETWORK_ERROR```, details : ```Hls.ErrorDetails.FRAG_PARSING_ERROR```, fatal : ```true/false```, reason : failure reason}
+
+
+### Media Errors
+  - ```Hls.ErrorDetails.MANIFEST_INCOMPATIBLE_CODECS_ERROR```raised when manifest only contains quality level with codecs incompatible with MediaSource Engine.
+    - data: { type : ```MEDIA_ERROR```, details : ```Hls.ErrorDetails.MANIFEST_INCOMPATIBLE_CODECS_ERROR```, fatal : ```true```, url : manifest URL}
   - ```Hls.ErrorDetails.BUFFER_APPEND_ERROR```raised when exception is raised while calling buffer append
-    - data: { type : ```NETWORK_ERROR```, details : ```Hls.ErrorDetails.BUFFER_APPEND_ERROR```, fatal : ```true```, frag : fragment object}
+    - data: { type : ```MEDIA_ERROR```, details : ```Hls.ErrorDetails.BUFFER_APPEND_ERROR```, fatal : ```true```, frag : fragment object}
   - ```Hls.ErrorDetails.BUFFER_APPENDING_ERROR```raised when exception is raised during buffer appending
-    - data: { type : ```NETWORK_ERROR```, details : ```Hls.ErrorDetails.BUFFER_APPENDING_ERROR```, fatal : ```false```, frag : fragment object}
+    - data: { type : ```MEDIA_ERROR```, details : ```Hls.ErrorDetails.BUFFER_APPENDING_ERROR```, fatal : ```false```}
+  - ```Hls.ErrorDetails.BUFFER_STALLED_ERROR```raised when playback is stuck because buffer is running out of data
+    - data: { type : ```MEDIA_ERROR```, details : ```Hls.ErrorDetails.BUFFER_STALLED_ERROR```, fatal : ```false```}
+  - ```Hls.ErrorDetails.BUFFER_FULL_ERROR```raised when no data can be appended anymore in media buffer because it is full. this error is recovered automatically by performing a smooth level switching that empty buffers (without disrupting the playback) and reducing the max buffer length.
+    - data: { type : ```MEDIA_ERROR```, details : ```Hls.ErrorDetails.BUFFER_FULL_ERROR```, fatal : ```false```}
+  - ```Hls.ErrorDetails.BUFFER_SEEK_OVER_HOLE```raised after hls.js seeks over a buffer hole to unstuck the playback, 
+    - data: { type : ```MEDIA_ERROR```, details : ```Hls.ErrorDetails.BUFFER_SEEK_OVER_HOLE```, fatal : ```false```, hole : hole duration}
 
 ## Objects
 ### Level

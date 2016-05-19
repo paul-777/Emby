@@ -1,5 +1,4 @@
 ﻿using MediaBrowser.Common;
-using MediaBrowser.Common.IO;
 using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Devices;
@@ -26,6 +25,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using CommonIO;
 
 namespace MediaBrowser.Server.Implementations.Dto
@@ -92,10 +92,22 @@ namespace MediaBrowser.Server.Implementations.Dto
             var syncDictionary = GetSyncedItemProgressDictionary(syncJobItems);
 
             var list = new List<BaseItemDto>();
+            var programTuples = new List<Tuple<BaseItem, BaseItemDto>> { };
+            var channelTuples = new List<Tuple<BaseItemDto, LiveTvChannel>> { };
 
             foreach (var item in items)
             {
                 var dto = GetBaseItemDtoInternal(item, options, syncDictionary, user, owner);
+
+                var tvChannel = item as LiveTvChannel;
+                if (tvChannel != null)
+                {
+                    channelTuples.Add(new Tuple<BaseItemDto, LiveTvChannel>(dto, tvChannel));
+                }
+                else if (item is LiveTvProgram)
+                {
+                    programTuples.Add(new Tuple<BaseItem, BaseItemDto>(item, dto));
+                }
 
                 var byName = item as IItemByName;
 
@@ -103,11 +115,10 @@ namespace MediaBrowser.Server.Implementations.Dto
                 {
                     if (options.Fields.Contains(ItemFields.ItemCounts))
                     {
-                        var itemFilter = byName.GetItemFilter();
-
-                        var libraryItems = user != null ?
-                           user.RootFolder.GetRecursiveChildren(user, itemFilter) :
-                           _libraryManager.RootFolder.GetRecursiveChildren(itemFilter);
+                        var libraryItems = byName.GetTaggedItems(new InternalItemsQuery(user)
+                        {
+                            Recursive = true
+                        });
 
                         SetItemByNameInfo(item, dto, libraryItems.ToList(), user);
                     }
@@ -116,6 +127,17 @@ namespace MediaBrowser.Server.Implementations.Dto
                 FillSyncInfo(dto, item, syncJobItems, options, user);
 
                 list.Add(dto);
+            }
+
+            if (programTuples.Count > 0)
+            {
+                var task = _livetvManager().AddInfoToProgramDto(programTuples, options.Fields, user);
+                Task.WaitAll(task);
+            }
+
+            if (channelTuples.Count > 0)
+            {
+                _livetvManager().AddChannelInfo(channelTuples, options, user);
             }
 
             return list;
@@ -138,6 +160,18 @@ namespace MediaBrowser.Server.Implementations.Dto
             var syncProgress = GetSyncedItemProgress(options);
 
             var dto = GetBaseItemDtoInternal(item, options, GetSyncedItemProgressDictionary(syncProgress), user, owner);
+            var tvChannel = item as LiveTvChannel;
+            if (tvChannel != null)
+            {
+                var list = new List<Tuple<BaseItemDto, LiveTvChannel>> { new Tuple<BaseItemDto, LiveTvChannel>(dto, tvChannel) };
+                _livetvManager().AddChannelInfo(list, options, user);
+            }
+            else if (item is LiveTvProgram)
+            {
+                var list = new List<Tuple<BaseItem, BaseItemDto>> { new Tuple<BaseItem, BaseItemDto>(item, dto) };
+                var task = _livetvManager().AddInfoToProgramDto(list, options.Fields, user);
+                Task.WaitAll(task);
+            }
 
             var byName = item as IItemByName;
 
@@ -159,24 +193,13 @@ namespace MediaBrowser.Server.Implementations.Dto
 
         private List<BaseItem> GetTaggedItems(IItemByName byName, User user)
         {
-            var person = byName as Person;
-
-            if (person != null)
+            var items = byName.GetTaggedItems(new InternalItemsQuery(user)
             {
-                var items = _libraryManager.GetItems(new InternalItemsQuery(user)
-                {
-                    Person = byName.Name
+                Recursive = true
 
-                }, new string[] { });
+            }).ToList();
 
-                return items.ToList();
-            }
-
-            var itemFilter = byName.GetItemFilter();
-
-            return user != null ?
-               user.RootFolder.GetRecursiveChildren(user, itemFilter).ToList() :
-               _libraryManager.RootFolder.GetRecursiveChildren(itemFilter).ToList();
+            return items;
         }
 
         private SyncedItemProgress[] GetSyncedItemProgress(DtoOptions options)
@@ -247,7 +270,7 @@ namespace MediaBrowser.Server.Implementations.Dto
 
                 else if (dto.HasSyncJob.Value)
                 {
-                    dto.SyncStatus = SyncJobItemStatus.Queued;
+                    dto.SyncStatus = syncProgress.Where(i => string.Equals(i.ItemId, dto.Id, StringComparison.OrdinalIgnoreCase)).Select(i => i.Status).Max();
                 }
             }
         }
@@ -272,7 +295,7 @@ namespace MediaBrowser.Server.Implementations.Dto
 
                 else if (dto.HasSyncJob.Value)
                 {
-                    dto.SyncStatus = SyncJobItemStatus.Queued;
+                    dto.SyncStatus = syncProgress.Where(i => string.Equals(i.ItemId, dto.Id, StringComparison.OrdinalIgnoreCase)).Select(i => i.Status).Max();
                 }
             }
         }
@@ -295,6 +318,11 @@ namespace MediaBrowser.Server.Implementations.Dto
             {
                 ServerId = _appHost.SystemId
             };
+
+            if (item.SourceType == SourceType.Channel)
+            {
+                dto.SourceType = item.SourceType.ToString();
+            }
 
             if (fields.Contains(ItemFields.People))
             {
@@ -347,12 +375,6 @@ namespace MediaBrowser.Server.Implementations.Dto
 
             AttachBasicFields(dto, item, owner, options);
 
-            var tvChannel = item as LiveTvChannel;
-            if (tvChannel != null)
-            {
-                _livetvManager().AddChannelInfo(dto, tvChannel, options, user);
-            }
-
             var collectionFolder = item as ICollectionFolder;
             if (collectionFolder != null)
             {
@@ -361,12 +383,6 @@ namespace MediaBrowser.Server.Implementations.Dto
                 dto.CollectionType = user == null ?
                     collectionFolder.CollectionType :
                     collectionFolder.GetViewType(user);
-            }
-
-            var playlist = item as Playlist;
-            if (playlist != null)
-            {
-                AttachLinkedChildImages(dto, playlist, user, options);
             }
 
             if (fields.Contains(ItemFields.CanDelete))
@@ -391,11 +407,6 @@ namespace MediaBrowser.Server.Implementations.Dto
             if (item is ILiveTvRecording)
             {
                 _livetvManager().AddInfoToRecordingDto(item, dto, user);
-            }
-
-            else if (item is LiveTvProgram)
-            {
-                _livetvManager().AddInfoToProgramDto(item, dto, fields, user);
             }
 
             return dto;
@@ -437,6 +448,7 @@ namespace MediaBrowser.Server.Implementations.Dto
                 dto.EpisodeCount = taggedItems.Count(i => i is Episode);
                 dto.GameCount = taggedItems.Count(i => i is Game);
                 dto.MovieCount = taggedItems.Count(i => i is Movie);
+                dto.TrailerCount = taggedItems.Count(i => i is Trailer);
                 dto.MusicVideoCount = taggedItems.Count(i => i is MusicVideo);
                 dto.SeriesCount = taggedItems.Count(i => i is Series);
                 dto.SongCount = taggedItems.Count(i => i is Audio);
@@ -457,7 +469,7 @@ namespace MediaBrowser.Server.Implementations.Dto
         {
             if (item.IsFolder)
             {
-                var userData = _userDataRepository.GetUserData(user.Id, item.GetUserDataKey());
+                var userData = _userDataRepository.GetUserData(user, item);
 
                 // Skip the user data manager because we've already looped through the recursive tree and don't want to do it twice
                 // TODO: Improve in future
@@ -465,15 +477,24 @@ namespace MediaBrowser.Server.Implementations.Dto
 
                 var folder = (Folder)item;
 
-                if (!(folder is IChannelItem) && !(folder is Channel))
+                if (item.SourceType == SourceType.Library)
                 {
                     dto.ChildCount = GetChildCount(folder, user);
 
-                    // These are just far too slow. 
-                    if (!(folder is UserRootFolder) && !(folder is UserView) && !(folder is ICollectionFolder))
+                    if (folder.SupportsUserDataFromChildren)
                     {
                         SetSpecialCounts(folder, user, dto, fields, syncProgress);
                     }
+                }
+
+                if (fields.Contains(ItemFields.CumulativeRunTimeTicks))
+                {
+                    dto.CumulativeRunTimeTicks = item.RunTimeTicks;
+                }
+
+                if (fields.Contains(ItemFields.DateLastMediaAdded))
+                {
+                    dto.DateLastMediaAdded = folder.DateLastMediaAdded;
                 }
 
                 dto.UserData.Played = dto.UserData.PlayedPercentage.HasValue && dto.UserData.PlayedPercentage.Value >= 100;
@@ -596,9 +617,12 @@ namespace MediaBrowser.Server.Implementations.Dto
         {
             if (!string.IsNullOrEmpty(item.Album))
             {
-                var parentAlbum = _libraryManager.RootFolder
-                    .GetRecursiveChildren(i => i is MusicAlbum && string.Equals(i.Name, item.Album, StringComparison.OrdinalIgnoreCase))
-                    .FirstOrDefault();
+                var parentAlbum = _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { typeof(MusicAlbum).Name },
+                    Name = item.Album
+
+                }).FirstOrDefault();
 
                 if (parentAlbum != null)
                 {
@@ -639,6 +663,8 @@ namespace MediaBrowser.Server.Implementations.Dto
         private IEnumerable<string> GetCacheTags(BaseItem item, ImageType type, int limit)
         {
             return item.GetImages(type)
+                // Convert to a list now in case GetImageCacheTag is slow
+                .ToList()
                 .Select(p => GetImageCacheTag(item, p))
                 .Where(i => i != null)
                 .Take(limit)
@@ -1094,6 +1120,11 @@ namespace MediaBrowser.Server.Implementations.Dto
                 dto.Overview = item.Overview;
             }
 
+            if (fields.Contains(ItemFields.OriginalTitle))
+            {
+                dto.OriginalTitle = item.OriginalTitle;
+            }
+
             if (fields.Contains(ItemFields.ShortOverview))
             {
                 var hasShortOverview = item as IHasShortOverview;
@@ -1117,10 +1148,10 @@ namespace MediaBrowser.Server.Implementations.Dto
 
             if (fields.Contains(ItemFields.ParentId))
             {
-                var displayParent = item.DisplayParent;
-                if (displayParent != null)
+                var displayParentId = item.DisplayParentId;
+                if (displayParentId.HasValue)
                 {
-                    dto.ParentId = GetDtoId(displayParent);
+                    dto.ParentId = displayParentId.Value.ToString("N");
                 }
             }
 
@@ -1233,6 +1264,7 @@ namespace MediaBrowser.Server.Implementations.Dto
             if (audio != null)
             {
                 dto.Album = audio.Album;
+                dto.ExtraType = audio.ExtraType;
 
                 var albumParent = audio.AlbumEntity;
 
@@ -1325,9 +1357,10 @@ namespace MediaBrowser.Server.Implementations.Dto
 
                 if (fields.Contains(ItemFields.MediaSourceCount))
                 {
-                    if (video.MediaSourceCount != 1)
+                    var mediaSourceCount = video.MediaSourceCount;
+                    if (mediaSourceCount != 1)
                     {
-                        dto.MediaSourceCount = video.MediaSourceCount;
+                        dto.MediaSourceCount = mediaSourceCount;
                     }
                 }
 
@@ -1335,6 +1368,8 @@ namespace MediaBrowser.Server.Implementations.Dto
                 {
                     dto.Chapters = GetChapterInfoDtos(item);
                 }
+
+                dto.ExtraType = video.ExtraType;
             }
 
             if (fields.Contains(ItemFields.MediaStreams))
@@ -1358,16 +1393,6 @@ namespace MediaBrowser.Server.Implementations.Dto
                     }
 
                     dto.MediaStreams = mediaStreams;
-                }
-            }
-
-            // Add MovieInfo
-            var movie = item as Movie;
-            if (movie != null)
-            {
-                if (fields.Contains(ItemFields.TmdbCollectionName))
-                {
-                    dto.TmdbCollectionName = movie.TmdbCollectionName;
                 }
             }
 
@@ -1524,54 +1549,12 @@ namespace MediaBrowser.Server.Implementations.Dto
 
             dto.ChannelId = item.ChannelId;
 
-            var channelItem = item as IChannelItem;
-            if (channelItem != null)
+            if (item.SourceType == SourceType.Channel && !string.IsNullOrWhiteSpace(item.ChannelId))
             {
-                dto.ChannelName = _channelManagerFactory().GetChannel(channelItem.ChannelId).Name;
-            }
-
-            var channelMediaItem = item as IChannelMediaItem;
-            if (channelMediaItem != null)
-            {
-                dto.ExtraType = channelMediaItem.ExtraType;
-            }
-        }
-
-        private void AttachLinkedChildImages(BaseItemDto dto, Folder folder, User user, DtoOptions options)
-        {
-            List<BaseItem> linkedChildren = null;
-
-            var backdropLimit = options.GetImageLimit(ImageType.Backdrop);
-
-            if (backdropLimit > 0 && dto.BackdropImageTags.Count == 0)
-            {
-                linkedChildren = user == null
-                    ? folder.GetRecursiveChildren().ToList()
-                    : folder.GetRecursiveChildren(user).ToList();
-
-                var parentWithBackdrop = linkedChildren.FirstOrDefault(i => i.GetImages(ImageType.Backdrop).Any());
-
-                if (parentWithBackdrop != null)
+                var channel = _libraryManager.GetItemById(item.ChannelId);
+                if (channel != null)
                 {
-                    dto.ParentBackdropItemId = GetDtoId(parentWithBackdrop);
-                    dto.ParentBackdropImageTags = GetBackdropImageTags(parentWithBackdrop, backdropLimit);
-                }
-            }
-
-            if (!dto.ImageTags.ContainsKey(ImageType.Primary) && options.GetImageLimit(ImageType.Primary) > 0)
-            {
-                if (linkedChildren == null)
-                {
-                    linkedChildren = user == null
-                        ? folder.GetRecursiveChildren().ToList()
-                        : folder.GetRecursiveChildren(user).ToList();
-                }
-                var parentWithImage = linkedChildren.FirstOrDefault(i => i.GetImages(ImageType.Primary).Any());
-
-                if (parentWithImage != null)
-                {
-                    dto.ParentPrimaryImageItemId = GetDtoId(parentWithImage);
-                    dto.ParentPrimaryImageTag = GetImageCacheTag(parentWithImage, ImageType.Primary);
+                    dto.ChannelName = channel.Name;
                 }
             }
         }
@@ -1631,9 +1614,7 @@ namespace MediaBrowser.Server.Implementations.Dto
         {
             var recursiveItemCount = 0;
             var unplayed = 0;
-            long runtime = 0;
 
-            DateTime? dateLastMediaAdded = null;
             double totalPercentPlayed = 0;
             double totalSyncPercent = 0;
             var addSyncInfo = fields.Contains(ItemFields.SyncInfo);
@@ -1642,8 +1623,7 @@ namespace MediaBrowser.Server.Implementations.Dto
             {
                 IsFolder = false,
                 Recursive = true,
-                IsVirtualUnaired = false,
-                IsMissing = false,
+                ExcludeLocationTypes = new[] { LocationType.Virtual },
                 User = user
 
             }).Result.Items;
@@ -1651,16 +1631,7 @@ namespace MediaBrowser.Server.Implementations.Dto
             // Loop through each recursive child
             foreach (var child in children)
             {
-                if (!dateLastMediaAdded.HasValue)
-                {
-                    dateLastMediaAdded = child.DateCreated;
-                }
-                else
-                {
-                    dateLastMediaAdded = new[] { dateLastMediaAdded.Value, child.DateCreated }.Max();
-                }
-
-                var userdata = _userDataRepository.GetUserData(user.Id, child.GetUserDataKey());
+                var userdata = _userDataRepository.GetUserData(user, child);
 
                 recursiveItemCount++;
 
@@ -1687,8 +1658,6 @@ namespace MediaBrowser.Server.Implementations.Dto
                 {
                     unplayed++;
                 }
-
-                runtime += child.RunTimeTicks ?? 0;
 
                 if (addSyncInfo)
                 {
@@ -1727,16 +1696,6 @@ namespace MediaBrowser.Server.Implementations.Dto
                         dto.SyncPercent = pct;
                     }
                 }
-            }
-
-            if (runtime > 0 && fields.Contains(ItemFields.CumulativeRunTimeTicks))
-            {
-                dto.CumulativeRunTimeTicks = runtime;
-            }
-
-            if (fields.Contains(ItemFields.DateLastMediaAdded))
-            {
-                dto.DateLastMediaAdded = dateLastMediaAdded;
             }
         }
 

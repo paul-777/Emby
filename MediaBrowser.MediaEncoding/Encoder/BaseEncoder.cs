@@ -1,10 +1,8 @@
 ﻿using MediaBrowser.Common.Configuration;
-using MediaBrowser.Common.IO;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Controller.Session;
-using MediaBrowser.MediaEncoding.Subtitles;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
@@ -20,6 +18,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
+using MediaBrowser.Model.Dlna;
 
 namespace MediaBrowser.MediaEncoding.Encoder
 {
@@ -367,9 +366,14 @@ namespace MediaBrowser.MediaEncoding.Encoder
         /// <returns>System.String.</returns>
         protected string GetVideoDecoder(EncodingJob state)
         {
-            if (string.Equals(GetEncodingOptions().HardwareAccelerationType, "qsv", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(state.OutputVideoCodec, "copy", StringComparison.OrdinalIgnoreCase))
             {
-                if (state.VideoStream != null && !string.IsNullOrWhiteSpace(state.VideoStream.Codec))
+                return null;    
+            }
+
+            if (state.VideoStream != null && !string.IsNullOrWhiteSpace(state.VideoStream.Codec))
+            {
+                if (string.Equals(GetEncodingOptions().HardwareAccelerationType, "qsv", StringComparison.OrdinalIgnoreCase))
                 {
                     switch (state.MediaSource.VideoStream.Codec.ToLower())
                     {
@@ -377,7 +381,8 @@ namespace MediaBrowser.MediaEncoding.Encoder
                         case "h264":
                             if (MediaEncoder.SupportsDecoder("h264_qsv"))
                             {
-                                return "-c:v h264_qsv ";
+                                // Seeing stalls and failures with decoding. Not worth it compared to encoding.
+                                //return "-c:v h264_qsv ";
                             }
                             break;
                         case "mpeg2video":
@@ -456,10 +461,19 @@ namespace MediaBrowser.MediaEncoding.Encoder
         {
             var arg = string.Format("-i {0}", GetInputPathArgument(state));
 
-            if (state.SubtitleStream != null)
+            if (state.SubtitleStream != null && state.Options.SubtitleMethod == SubtitleDeliveryMethod.Encode)
             {
                 if (state.SubtitleStream.IsExternal && !state.SubtitleStream.IsTextSubtitleStream)
                 {
+                    if (state.VideoStream != null && state.VideoStream.Width.HasValue)
+                    {
+                        // This is hacky but not sure how to get the exact subtitle resolution
+                        double height = state.VideoStream.Width.Value;
+                        height /= 16;
+                        height *= 9;
+
+                        arg += string.Format(" -canvas_size {0}:{1}", state.VideoStream.Width.Value.ToString(CultureInfo.InvariantCulture), Convert.ToInt32(height).ToString(CultureInfo.InvariantCulture));
+                    }
                     arg += " -i \"" + state.SubtitleStream.Path + "\"";
                 }
             }
@@ -817,7 +831,7 @@ namespace MediaBrowser.MediaEncoding.Encoder
                 args += " -map -0:a";
             }
 
-            if (state.SubtitleStream == null)
+            if (state.SubtitleStream == null || state.Options.SubtitleMethod == SubtitleDeliveryMethod.Hls)
             {
                 args += " -map -0:s";
             }
@@ -924,7 +938,7 @@ namespace MediaBrowser.MediaEncoding.Encoder
 
             var output = string.Empty;
 
-            if (state.SubtitleStream != null && state.SubtitleStream.IsTextSubtitleStream)
+            if (state.SubtitleStream != null && state.SubtitleStream.IsTextSubtitleStream && state.Options.SubtitleMethod == SubtitleDeliveryMethod.Encode)
             {
                 var subParam = GetTextSubtitleParam(state);
 
@@ -961,7 +975,7 @@ namespace MediaBrowser.MediaEncoding.Encoder
 
                 if (!string.IsNullOrEmpty(state.SubtitleStream.Language))
                 {
-                    var charenc = SubtitleEncoder.GetSubtitleFileCharacterSet(subtitlePath, state.MediaSource.Protocol, CancellationToken.None).Result;
+                    var charenc = SubtitleEncoder.GetSubtitleFileCharacterSet(subtitlePath, state.SubtitleStream.Language, state.MediaSource.Protocol, CancellationToken.None).Result;
 
                     if (!string.IsNullOrEmpty(charenc))
                     {
@@ -994,7 +1008,7 @@ namespace MediaBrowser.MediaEncoding.Encoder
             // Boost volume to 200% when downsampling from 6ch to 2ch
             if (channels.HasValue && channels.Value <= 2)
             {
-                if (state.AudioStream != null && state.AudioStream.Channels.HasValue && state.AudioStream.Channels.Value > 5)
+                if (state.AudioStream != null && state.AudioStream.Channels.HasValue && state.AudioStream.Channels.Value > 5 && !GetEncodingOptions().DownMixAudioBoost.Equals(1))
                 {
                     volParam = ",volume=" + GetEncodingOptions().DownMixAudioBoost.ToString(UsCulture);
                 }
@@ -1009,7 +1023,7 @@ namespace MediaBrowser.MediaEncoding.Encoder
 
             var pts = string.Empty;
 
-            if (state.SubtitleStream != null && state.SubtitleStream.IsTextSubtitleStream)
+            if (state.SubtitleStream != null && state.SubtitleStream.IsTextSubtitleStream && state.Options.SubtitleMethod == SubtitleDeliveryMethod.Encode && !state.Options.CopyTimestamps)
             {
                 var seconds = TimeSpan.FromTicks(state.Options.StartTimeTicks ?? 0).TotalSeconds;
 

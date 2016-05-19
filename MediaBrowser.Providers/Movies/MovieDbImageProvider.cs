@@ -1,11 +1,9 @@
 ﻿using System.Globalization;
 using MediaBrowser.Common.Net;
-using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Providers;
-using MediaBrowser.Model.Channels;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Providers;
@@ -19,7 +17,7 @@ using System.Threading.Tasks;
 
 namespace MediaBrowser.Providers.Movies
 {
-    class MovieDbImageProvider : IRemoteImageProvider, IHasOrder, IHasChangeMonitor
+    class MovieDbImageProvider : IRemoteImageProvider, IHasOrder, IHasItemChangeMonitor
     {
         private readonly IJsonSerializer _jsonSerializer;
         private readonly IHttpClient _httpClient;
@@ -42,23 +40,6 @@ namespace MediaBrowser.Providers.Movies
 
         public bool Supports(IHasImages item)
         {
-            var channelItem = item as IChannelMediaItem;
-
-            if (channelItem != null)
-            {
-                if (channelItem.ContentType == ChannelMediaContentType.Movie)
-                {
-                    return true;
-                }
-                if (channelItem.ContentType == ChannelMediaContentType.MovieExtra)
-                {
-                    if (channelItem.ExtraType == ExtraType.Trailer)
-                    {
-                        return true;
-                    }
-                }
-            }
-
             // Supports images for tv movies
             var tvProgram = item as LiveTvProgram;
             if (tvProgram != null && tvProgram.IsMovie)
@@ -66,7 +47,7 @@ namespace MediaBrowser.Providers.Movies
                 return true;
             }
 
-            return item is Movie || item is MusicVideo;
+            return item is Movie || item is MusicVideo || item is Trailer;
         }
 
         public IEnumerable<ImageType> GetSupportedImages(IHasImages item)
@@ -82,7 +63,7 @@ namespace MediaBrowser.Providers.Movies
         {
             var list = new List<RemoteImageInfo>();
 
-            var results = await FetchImages((BaseItem)item, _jsonSerializer, cancellationToken).ConfigureAwait(false);
+            var results = await FetchImages((BaseItem)item, null, _jsonSerializer, cancellationToken).ConfigureAwait(false);
 
             if (results == null)
             {
@@ -91,7 +72,7 @@ namespace MediaBrowser.Providers.Movies
 
             var tmdbSettings = await MovieDbProvider.Current.GetTmdbSettings(cancellationToken).ConfigureAwait(false);
 
-            var tmdbImageUrl = tmdbSettings.images.base_url + "original";
+            var tmdbImageUrl = tmdbSettings.images.secure_base_url + "original";
 
             var supportedImages = GetSupportedImages(item).ToList();
 
@@ -183,14 +164,13 @@ namespace MediaBrowser.Providers.Movies
         /// Fetches the images.
         /// </summary>
         /// <param name="item">The item.</param>
+        /// <param name="language">The language.</param>
         /// <param name="jsonSerializer">The json serializer.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>Task{MovieImages}.</returns>
-        private async Task<MovieDbProvider.Images> FetchImages(BaseItem item, IJsonSerializer jsonSerializer,
-            CancellationToken cancellationToken)
+        private async Task<MovieDbProvider.Images> FetchImages(BaseItem item, string language, IJsonSerializer jsonSerializer, CancellationToken cancellationToken)
         {
             var tmdbId = item.GetProviderId(MetadataProviders.Tmdb);
-            var language = item.GetPreferredMetadataLanguage();
 
             if (string.IsNullOrWhiteSpace(tmdbId))
             {
@@ -242,9 +222,9 @@ namespace MediaBrowser.Providers.Movies
             });
         }
 
-        public bool HasChanged(IHasMetadata item, IDirectoryService directoryService, DateTime date)
+        public bool HasChanged(IHasMetadata item, IDirectoryService directoryService)
         {
-            return MovieDbProvider.Current.HasChanged(item, date);
+            return MovieDbProvider.Current.HasChanged(item);
         }
     }
 }

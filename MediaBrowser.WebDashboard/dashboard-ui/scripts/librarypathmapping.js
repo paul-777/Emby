@@ -1,12 +1,12 @@
-﻿(function ($, document, window) {
+﻿define(['jQuery'], function ($) {
 
     var currentConfig;
 
     function remove(page, index) {
 
-        Dashboard.confirm(Globalize.translate('MessageConfirmPathSubstitutionDeletion'), Globalize.translate('HeaderConfirmDeletion'), function (result) {
+        require(['confirm'], function (confirm) {
 
-            if (result) {
+            confirm(Globalize.translate('MessageConfirmPathSubstitutionDeletion'), Globalize.translate('HeaderConfirmDeletion')).then(function () {
 
                 ApiClient.getServerConfiguration().then(function (config) {
 
@@ -17,11 +17,8 @@
                         reload(page);
                     });
                 });
-            }
-
+            });
         });
-
-
     }
 
     function addSubstitution(page, config) {
@@ -52,7 +49,7 @@
 
             mapHtml += '</paper-item-body>';
 
-            mapHtml += '<paper-icon-button data-index="' + index + '" icon="delete" class="btnDeletePath"></paper-icon-button>';
+            mapHtml += '<button type="button" is="paper-icon-button-light" data-index="' + index + '" class="btnDeletePath"><iron-icon icon="delete"></iron-icon></button>';
 
             mapHtml += '</paper-icon-item>';
 
@@ -115,6 +112,23 @@
         return false;
     }
 
+    function getTabs() {
+        return [
+        {
+            href: 'library.html',
+            name: Globalize.translate('TabFolders')
+        },
+         {
+             href: 'librarypathmapping.html',
+             name: Globalize.translate('TabPathSubstitution')
+         },
+         {
+             href: 'librarysettings.html',
+             name: Globalize.translate('TabAdvanced')
+         }];
+    }
+
+
     $(document).on('pageinit', "#libraryPathMappingPage", function () {
 
         var page = this;
@@ -125,6 +139,7 @@
 
     }).on('pageshow', "#libraryPathMappingPage", function () {
 
+        LibraryMenu.setTabs('librarysetup', 1, getTabs);
         Dashboard.showLoadingMsg();
 
         var page = this;
@@ -141,4 +156,4 @@
 
     });
 
-})(jQuery, document, window);
+});

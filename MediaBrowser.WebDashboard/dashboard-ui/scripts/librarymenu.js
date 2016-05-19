@@ -1,58 +1,59 @@
-﻿(function (window, document, $, devicePixelRatio) {
+﻿define(['imageLoader', 'layoutManager', 'jQuery'], function (imageLoader, layoutManager, $) {
+
+    var mainDrawerPanel = document.querySelector('.mainDrawerPanel');
 
     function renderHeader() {
 
         var html = '';
 
+        html += '<div class="primaryIcons">';
         var backIcon = browserInfo.safari ? 'chevron-left' : 'arrow-back';
 
-        html += '<paper-icon-button icon="' + backIcon + '" class="headerButton headerButtonLeft headerBackButton hide"></paper-icon-button>';
+        html += '<button type="button" is="paper-icon-button-light" class="headerButton headerButtonLeft headerBackButton hide"><iron-icon icon="' + backIcon + '"></iron-icon></button>';
 
-        if (AppInfo.enableNavDrawer) {
-            html += '<paper-icon-button icon="menu" class="headerButton mainDrawerButton barsMenuButton headerButtonLeft"></paper-icon-button>';
-        }
+        html += '<button type="button" is="paper-icon-button-light" class="headerButton mainDrawerButton barsMenuButton headerButtonLeft"><iron-icon icon="menu"></iron-icon></button>';
+        html += '<button type="button" is="paper-icon-button-light" class="headerButton headerAppsButton barsMenuButton headerButtonLeft"><iron-icon icon="menu"></iron-icon></button>';
 
         html += '<div class="libraryMenuButtonText headerButton">' + Globalize.translate('ButtonHome') + '</div>';
 
         html += '<div class="viewMenuSecondary">';
 
         html += '<span class="headerSelectedPlayer"></span>';
-        html += '<paper-icon-button icon="cast" class="btnCast headerButton headerButtonRight hide"></paper-icon-button>';
+        html += '<button is="paper-icon-button-light" class="btnCast headerButton headerButtonRight hide"><iron-icon icon="cast"></iron-icon></button>';
 
         if (AppInfo.enableSearchInTopMenu) {
-            html += '<paper-icon-button icon="search" class="headerButton headerButtonRight headerSearchButton hide" onclick="Search.showSearchPanel();"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" class=headerButton headerButtonRight headerSearchButton hide" onclick="Search.showSearchPanel();"><iron-icon icon="search"></iron-icon></button>';
             html += '<div class="viewMenuSearch hide">';
             html += '<form class="viewMenuSearchForm">';
             html += '<input type="text" data-role="none" data-type="search" class="headerSearchInput" autocomplete="off" spellcheck="off" />';
-            html += '<paper-icon-button icon="close" class="btnCloseSearch"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" class="btnCloseSearch"><iron-icon icon="close"></iron-icon></button>';
             html += '</form>';
             html += '</div>';
         }
 
-        html += '<paper-icon-button icon="mic" class="headerButton headerButtonRight headerVoiceButton hide" onclick="VoiceInputManager.startListening();"></paper-icon-button>';
+        html += '<button is="paper-icon-button-light" class="headerButton headerButtonRight headerVoiceButton hide"><iron-icon icon="mic"></iron-icon></button>';
 
-        html += '<paper-button class="headerButton headerButtonRight btnNotifications subdued" type="button" title="Notifications"><div class="btnNotificationsInner">0</div></paper-button>';
+        html += '<button is="paper-icon-button-light" class="headerButton headerButtonRight btnNotifications clearButton"><div class="btnNotificationsInner">0</div></button>';
 
-        if (!showUserAtTop()) {
-            html += '<paper-icon-button icon="person" class="headerButton headerButtonRight headerUserButton" onclick="return Dashboard.showUserFlyout(this);"></paper-icon-button>';
-        }
+        html += '<button is="paper-icon-button-light" class="headerButton headerButtonRight headerUserButton"><iron-icon icon="person"></iron-icon></button>';
 
         if (!browserInfo.mobile && !Dashboard.isConnectMode()) {
-            html += '<paper-icon-button icon="settings" class="headerButton headerButtonRight dashboardEntryHeaderButton" onclick="return LibraryMenu.onSettingsClicked(event);"></paper-icon-button>';
+            html += '<button is="paper-icon-button-light" class="headerButton headerButtonRight dashboardEntryHeaderButton" onclick="return LibraryMenu.onSettingsClicked(event);"><iron-icon icon="settings"></iron-icon></button>';
         }
 
+        html += '</div>';
+        html += '</div>';
+
+        html += '<div class="viewMenuBarTabs hiddenScrollX">';
         html += '</div>';
 
         var viewMenuBar = document.createElement('div');
         viewMenuBar.classList.add('viewMenuBar');
-        viewMenuBar.classList.add('ui-body-b');
         viewMenuBar.innerHTML = html;
 
-        document.body.appendChild(viewMenuBar);
+        document.querySelector('.skinHeader').appendChild(viewMenuBar);
 
-        require(['imageLoader'], function (imageLoader) {
-            imageLoader.lazyChildren(document.querySelector('.viewMenuBar'));
-        });
+        imageLoader.lazyChildren(document.querySelector('.viewMenuBar'));
 
         document.dispatchEvent(new CustomEvent("headercreated", {}));
         bindMenuEvents();
@@ -71,46 +72,53 @@
     function updateUserInHeader(user) {
 
         var header = document.querySelector('.viewMenuBar');
+        if (!header) {
+            return;
+        }
 
         var headerUserButton = header.querySelector('.headerUserButton');
         var hasImage;
 
         if (user && user.name) {
-            if (user.imageUrl && AppInfo.enableUserImage) {
+            if (user.imageUrl) {
 
                 var userButtonHeight = 26;
 
                 var url = user.imageUrl;
 
                 if (user.supportsImageParams) {
-                    url += "&height=" + (userButtonHeight * Math.max(devicePixelRatio || 1, 2));
+                    url += "&height=" + Math.round((userButtonHeight * Math.max(window.devicePixelRatio || 1, 2)));
                 }
 
                 if (headerUserButton) {
-                    headerUserButton.icon = null;
-                    headerUserButton.src = url;
-                    headerUserButton.classList.add('headerUserButtonRound');
+                    updateHeaderUserButton(headerUserButton, url, null);
                     hasImage = true;
                 }
             }
         }
 
         if (headerUserButton && !hasImage) {
-            headerUserButton.icon = 'person';
-            headerUserButton.src = null;
-            headerUserButton.classList.remove('headerUserButtonRound');
 
-            // Looks like a bug in paper-icon-button that this doesn't get removed
-            var headerUserButtonImg = headerUserButton.querySelector('img');
-            if (headerUserButtonImg) {
-                headerUserButtonImg.parentNode.removeChild(headerUserButtonImg);
-            }
+            updateHeaderUserButton(headerUserButton, null, 'person');
         }
         if (user) {
             updateLocalUser(user.localUser);
         }
 
         requiresUserRefresh = false;
+    }
+
+    function updateHeaderUserButton(headerUserButton, src, icon) {
+
+        if (src) {
+            headerUserButton.classList.add('headerUserButtonRound');
+            headerUserButton.innerHTML = '<img src="' + src + '" />';
+        } else if (icon) {
+            headerUserButton.classList.remove('headerUserButtonRound');
+            headerUserButton.innerHTML = '<iron-icon icon="' + icon + '"></iron-icon>';
+        } else {
+            headerUserButton.classList.remove('headerUserButtonRound');
+        }
     }
 
     function updateLocalUser(user) {
@@ -136,9 +144,9 @@
                 }
             }
 
-            requirejs(['voice/voice'], function () {
+            require(['voice/voice'], function (voice) {
 
-                if (VoiceInputManager.isSupported()) {
+                if (voice.isSupported()) {
                     header.querySelector('.headerVoiceButton').classList.remove('hide');
                 } else {
                     header.querySelector('.headerVoiceButton').classList.add('hide');
@@ -159,17 +167,97 @@
         }
     }
 
+    function showVoice() {
+        require(['voice/voice'], function (voice) {
+            voice.startListening();
+        });
+    }
+
+    function onHeaderUserButtonClick(e) {
+        Dashboard.showUserFlyout(e.target);
+    }
+
+    function onHeaderAppsButtonClick() {
+
+        require(['dialogHelper'], function (dialogHelper) {
+
+            var dlg = dialogHelper.createDialog({
+                removeOnClose: true,
+                modal: false,
+                autoFocus: false,
+                entryAnimationDuration: 160,
+                exitAnimationDuration: 160,
+                enableHistory: false
+            });
+
+            dlg.classList.add('ui-body-a');
+            dlg.classList.add('background-theme-a');
+            dlg.classList.add('adminAppsMenu');
+
+            var html = '';
+
+            html += '<div class="adminAppsMenuRow">';
+
+            html += '<a class="adminAppsButton" href="home.html">';
+            html += '<button is="paper-icon-button-light"><iron-icon icon="home"></iron-icon></button>';
+            html += '<div>' + Globalize.translate('ButtonHome') + '</div>';
+            html += '</a>';
+
+            html += '</div>';
+
+            html += '<div class="adminAppsMenuRow">';
+
+            html += '<a class="adminAppsButton" href="edititemmetadata.html">';
+            html += '<button is="paper-icon-button-light"><iron-icon icon="mode-edit"></iron-icon></button>';
+            html += '<div>' + Globalize.translate('ButtonMetadataManager') + '</div>';
+            html += '</a>';
+            html += '<a class="adminAppsButton" href="reports.html">';
+            html += '<button is="paper-icon-button-light"><iron-icon icon="insert-chart"></iron-icon></button>';
+            html += '<div>' + Globalize.translate('ButtonReports') + '</div>';
+            html += '</a>';
+
+            html += '</div>';
+
+            dlg.innerHTML = html;
+            document.body.appendChild(dlg);
+
+            dlg.addEventListener('click', function (e) {
+                var link = parentWithTag(e.target, 'A');
+                if (link) {
+                    dialogHelper.close(dlg);
+                }
+            });
+            dialogHelper.open(dlg);
+
+        });
+    }
+
     function bindMenuEvents() {
 
         var mainDrawerButton = document.querySelector('.mainDrawerButton');
 
         if (mainDrawerButton) {
-            mainDrawerButton.addEventListener('click', openMainDrawer);
+            mainDrawerButton.addEventListener('click', toggleMainDrawer);
         }
 
         var headerBackButton = document.querySelector('.headerBackButton');
         if (headerBackButton) {
             headerBackButton.addEventListener('click', onBackClick);
+        }
+
+        var headerVoiceButton = document.querySelector('.headerVoiceButton');
+        if (headerVoiceButton) {
+            headerVoiceButton.addEventListener('click', showVoice);
+        }
+
+        var headerUserButton = document.querySelector('.headerUserButton');
+        if (headerUserButton) {
+            headerUserButton.addEventListener('click', onHeaderUserButtonClick);
+        }
+
+        var headerAppsButton = document.querySelector('.headerAppsButton');
+        if (headerAppsButton) {
+            headerAppsButton.addEventListener('click', onHeaderAppsButtonClick);
         }
 
         var viewMenuBar = document.querySelector(".viewMenuBar");
@@ -185,14 +273,21 @@
         return LibraryBrowser.getHref(item, context);
     }
 
-    var requiresDrawerRefresh = true;
-    var requiresDashboardDrawerRefresh = true;
     var requiresUserRefresh = true;
     var lastOpenTime = new Date().getTime();
 
-    function openMainDrawer() {
+    function toggleMainDrawer() {
 
-        var drawerPanel = document.querySelector('.mainDrawerPanel');
+        if (mainDrawerPanel.selected == 'drawer') {
+            closeMainDrawer(mainDrawerPanel);
+        } else {
+            openMainDrawer(mainDrawerPanel);
+        }
+    }
+
+    function openMainDrawer(drawerPanel) {
+
+        drawerPanel = drawerPanel || document.querySelector('.mainDrawerPanel');
         drawerPanel.openDrawer();
         lastOpenTime = new Date().getTime();
     }
@@ -202,42 +297,11 @@
         if (browserInfo.mobile) {
             document.body.classList.add('bodyWithPopupOpen');
         }
-
-        var pageElem = $($.mobile.activePage)[0];
-
-        if (requiresDrawerRefresh || requiresDashboardDrawerRefresh) {
-
-            ConnectionManager.user(window.ApiClient).then(function (user) {
-
-                var drawer = document.querySelector('.mainDrawerPanel .mainDrawer');
-
-                if (requiresDrawerRefresh) {
-                    ensureDrawerStructure(drawer);
-
-                    refreshUserInfoInDrawer(user, drawer);
-                    refreshLibraryInfoInDrawer(user, drawer);
-                    refreshBottomUserInfoInDrawer(user, drawer);
-
-                    document.dispatchEvent(new CustomEvent("libraryMenuCreated", {}));
-                    updateLibraryMenu(user.localUser);
-                }
-
-                if (requiresDrawerRefresh || requiresDashboardDrawerRefresh) {
-                    refreshDashboardInfoInDrawer(pageElem, user, drawer);
-                    requiresDashboardDrawerRefresh = false;
-                }
-
-                requiresDrawerRefresh = false;
-            });
-        }
-
-        updateLibraryNavLinks(pageElem);
-
-        document.querySelector('.mainDrawerPanel #drawer').classList.add('verticalScrollingDrawer');
     }
-    function closeMainDrawer() {
+    function closeMainDrawer(drawerPanel) {
 
-        document.querySelector('.mainDrawerPanel').closeDrawer();
+        drawerPanel = drawerPanel || document.querySelector('.mainDrawerPanel');
+        drawerPanel.closeDrawer();
     }
     function onMainDrawerSelect(e) {
 
@@ -245,137 +309,55 @@
 
         if (drawer.selected != 'drawer') {
             document.body.classList.remove('bodyWithPopupOpen');
-            document.querySelector('.mainDrawerPanel #drawer').classList.remove('verticalScrollingDrawer');
         } else {
             onMainDrawerOpened();
         }
-    }
-
-    function ensureDrawerStructure(drawer) {
-
-        if (drawer.querySelector('.mainDrawerContent')) {
-            return;
-        }
-
-        var html = '<div class="mainDrawerContent">';
-
-        html += '<div class="userheader">';
-        html += '</div>';
-        html += '<div class="libraryDrawerContent">';
-        html += '</div>';
-        html += '<div class="dashboardDrawerContent">';
-        html += '</div>';
-        html += '<div class="userFooter">';
-        html += '</div>';
-
-        html += '</div>';
-
-        drawer.innerHTML = html;
-    }
-
-    function refreshUserInfoInDrawer(user, drawer) {
-
-        var html = '';
-
-        var userAtTop = showUserAtTop();
-
-        var homeHref = window.ApiClient ? 'index.html' : 'selectserver.html?showuser=1';
-
-        var hasUserImage = user.imageUrl && AppInfo.enableUserImage;
-
-        if (userAtTop) {
-
-            html += '<div class="drawerUserPanel">';
-
-            var imgWidth = 40;
-
-            if (hasUserImage) {
-                var url = user.imageUrl;
-                if (user.supportsImageParams) {
-                    url += "&width=" + (imgWidth * Math.max(devicePixelRatio || 1, 2));
-                    html += '<div class="lazy drawerUserPanelUserImage" data-src="' + url + '" style="width:' + imgWidth + 'px;height:' + imgWidth + 'px;"></div>';
-                }
-            } else {
-                html += '<div class="drawerUserPanelUserImage"><iron-icon icon="person" style="width:' + imgWidth + 'px;height:' + imgWidth + 'px;"></iron-icon></div>';
-            }
-
-            html += '<div class="drawerUserPanelUserName">';
-            html += user.name;
-            html += '</div>';
-
-            html += '</div>';
-
-            html += '<a class="sidebarLink lnkMediaFolder" data-itemid="remote" href="index.html" onclick="return LibraryMenu.onLinkClicked(event, this);"><iron-icon icon="home" class="sidebarLinkIcon" style="color:#2196F3;"></iron-icon><span class="sidebarLinkText">' + Globalize.translate('ButtonHome') + '</span></a>';
-
-        } else {
-            html += '<div style="margin-top:5px;"></div>';
-
-            html += '<a class="lnkMediaFolder sidebarLink" href="' + homeHref + '" onclick="return LibraryMenu.onLinkClicked(event, this);">';
-            html += '<div style="background-image:url(\'css/images/mblogoicon.png\');width:' + 28 + 'px;height:' + 28 + 'px;background-size:contain;background-repeat:no-repeat;background-position:center center;border-radius:1000px;vertical-align:middle;margin:0 1.6em 0 1.5em;display:inline-block;"></div>';
-            html += Globalize.translate('ButtonHome');
-            html += '</a>';
-        }
-
-        html += '<a class="sidebarLink lnkMediaFolder" data-itemid="remote" href="nowplaying.html" onclick="return LibraryMenu.onLinkClicked(event, this);"><iron-icon icon="tablet-android" class="sidebarLinkIcon" style="color:#673AB7;"></iron-icon><span class="sidebarLinkText">' + Globalize.translate('ButtonRemote') + '</span></a>';
-
-        var userHeader = drawer.querySelector('.userheader');
-
-        userHeader.innerHTML = html;
-
-        require(['imageLoader'], function (imageLoader) {
-            imageLoader.fillImages(userHeader.getElementsByClassName('lazy'));
-        });
     }
 
     function refreshLibraryInfoInDrawer(user, drawer) {
 
         var html = '';
 
+        html += '<div style="height:.5em;"></div>';
+
+        var homeHref = window.ApiClient ? 'home.html' : 'selectserver.html?showuser=1';
+
+        html += '<a class="lnkMediaFolder sidebarLink" href="' + homeHref + '" onclick="return LibraryMenu.onLinkClicked(event, this);">';
+        html += '<div style="background-image:url(\'css/images/mblogoicon.png\');width:' + 28 + 'px;height:' + 28 + 'px;background-size:contain;background-repeat:no-repeat;background-position:center center;border-radius:1000px;vertical-align:middle;margin:0 1.6em 0 1.5em;display:inline-block;"></div>';
+        html += Globalize.translate('ButtonHome');
+        html += '</a>';
+
+        html += '<a class="sidebarLink lnkMediaFolder" data-itemid="remote" href="nowplaying.html" onclick="return LibraryMenu.onLinkClicked(event, this);"><iron-icon icon="tablet-android" class="sidebarLinkIcon"></iron-icon><span class="sidebarLinkText">' + Globalize.translate('ButtonRemote') + '</span></a>';
+
         html += '<div class="sidebarDivider"></div>';
 
         html += '<div class="libraryMenuOptions">';
         html += '</div>';
 
-        drawer.querySelector('.libraryDrawerContent').innerHTML = html;
-    }
+        var localUser = user.localUser;
+        if (localUser && localUser.Policy.IsAdministrator) {
 
-    function refreshDashboardInfoInDrawer(page, user, drawer) {
+            html += '<div class="adminMenuOptions">';
+            html += '<div class="sidebarDivider"></div>';
 
-        var html = '';
+            html += '<div class="sidebarHeader">';
+            html += Globalize.translate('HeaderAdmin');
+            html += '</div>';
 
-        html += '<div class="sidebarDivider"></div>';
+            html += '<a class="sidebarLink lnkMediaFolder lnkManageServer" data-itemid="dashboard" href="#"><iron-icon icon="dashboard" class="sidebarLinkIcon"></iron-icon><span class="sidebarLinkText">' + Globalize.translate('ButtonManageServer') + '</span></a>';
+            html += '<a class="sidebarLink lnkMediaFolder editorViewMenu" data-itemid="editor" onclick="return LibraryMenu.onLinkClicked(event, this);" href="edititemmetadata.html"><iron-icon icon="mode-edit" class="sidebarLinkIcon"></iron-icon><span class="sidebarLinkText">' + Globalize.translate('ButtonMetadataManager') + '</span></a>';
 
-        html += Dashboard.getToolsMenuHtml(page);
-
-        html = html.split('href=').join('onclick="return LibraryMenu.onLinkClicked(event, this);" href=');
-
-        drawer.querySelector('.dashboardDrawerContent').innerHTML = html;
-    }
-
-    function refreshBottomUserInfoInDrawer(user, drawer) {
-
-        var html = '';
-
-        html += '<div class="adminMenuOptions">';
-        html += '<div class="sidebarDivider"></div>';
-
-        html += '<div class="sidebarHeader">';
-        html += Globalize.translate('HeaderAdmin');
-        html += '</div>';
-
-        html += '<a class="sidebarLink lnkMediaFolder lnkManageServer" data-itemid="dashboard" href="#"><iron-icon icon="dashboard" class="sidebarLinkIcon"></iron-icon><span class="sidebarLinkText">' + Globalize.translate('ButtonManageServer') + '</span></a>';
-        html += '<a class="sidebarLink lnkMediaFolder editorViewMenu" data-itemid="editor" onclick="return LibraryMenu.onLinkClicked(event, this);" href="edititemmetadata.html"><iron-icon icon="mode-edit" class="sidebarLinkIcon"></iron-icon><span class="sidebarLinkText">' + Globalize.translate('ButtonMetadataManager') + '</span></a>';
-
-        if (!browserInfo.mobile) {
-            html += '<a class="sidebarLink lnkMediaFolder" data-itemid="reports" onclick="return LibraryMenu.onLinkClicked(event, this);" href="reports.html"><iron-icon icon="insert-chart" class="sidebarLinkIcon"></iron-icon><span class="sidebarLinkText">' + Globalize.translate('ButtonReports') + '</span></a>';
+            if (!browserInfo.mobile) {
+                html += '<a class="sidebarLink lnkMediaFolder" data-itemid="reports" onclick="return LibraryMenu.onLinkClicked(event, this);" href="reports.html"><iron-icon icon="insert-chart" class="sidebarLinkIcon"></iron-icon><span class="sidebarLinkText">' + Globalize.translate('ButtonReports') + '</span></a>';
+            }
+            html += '</div>';
         }
-        html += '</div>';
 
         html += '<div class="userMenuOptions">';
 
         html += '<div class="sidebarDivider"></div>';
 
-        if (user.localUser && showUserAtTop()) {
+        if (user.localUser && (AppInfo.isNativeApp && browserInfo.android)) {
             html += '<a class="sidebarLink lnkMediaFolder lnkMySettings" onclick="return LibraryMenu.onLinkClicked(event, this);" href="mypreferencesmenu.html?userId=' + user.localUser.Id + '"><iron-icon icon="settings" class="sidebarLinkIcon"></iron-icon><span class="sidebarLinkText">' + Globalize.translate('ButtonSettings') + '</span></a>';
         }
 
@@ -385,15 +367,94 @@
             html += '<a class="sidebarLink lnkMediaFolder" data-itemid="selectserver" onclick="return LibraryMenu.onLinkClicked(event, this);" href="selectserver.html?showuser=1"><iron-icon icon="wifi" class="sidebarLinkIcon"></iron-icon><span class="sidebarLinkText">' + Globalize.translate('ButtonSelectServer') + '</span></a>';
         }
 
-        if (showUserAtTop()) {
+        if (user.localUser) {
             html += '<a class="sidebarLink lnkMediaFolder" data-itemid="logout" onclick="return LibraryMenu.onLogoutClicked(this);" href="#"><iron-icon icon="lock" class="sidebarLinkIcon"></iron-icon><span class="sidebarLinkText">' + Globalize.translate('ButtonSignOut') + '</span></a>';
         }
 
         html += '</div>';
 
-        drawer.querySelector('.userFooter').innerHTML = html;
+        var drawer = mainDrawerPanel.querySelector('.mainDrawer');
 
-        drawer.querySelector('.lnkManageServer').addEventListener('click', onManageServerClicked);
+        drawer.innerHTML = html;
+
+        var lnkManageServer = drawer.querySelector('.lnkManageServer');
+        if (lnkManageServer) {
+            lnkManageServer.addEventListener('click', onManageServerClicked);
+        }
+
+        require(['imageLoader'], function (imageLoader) {
+            imageLoader.fillImages(mainDrawerPanel.getElementsByClassName('lazy'));
+        });
+    }
+
+    function refreshDashboardInfoInDrawer(page, user) {
+
+        if (!mainDrawerPanel.querySelector('.adminDrawerLogo')) {
+            createDashboardMenu(page);
+        } else {
+            updateDashboardMenuSelectedItem();
+        }
+    }
+
+    function parentWithTag(elem, tagName) {
+
+        while (elem.tagName != tagName) {
+            elem = elem.parentNode;
+
+            if (!elem) {
+                return null;
+            }
+        }
+
+        return elem;
+    }
+
+    function updateDashboardMenuSelectedItem() {
+
+        var links = mainDrawerPanel.querySelectorAll('.sidebarLink');
+
+        for (var i = 0, length = links.length; i < length; i++) {
+            var link = links[i];
+
+            var selected = false;
+
+            var pageIds = link.getAttribute('data-pageids');
+            if (pageIds) {
+                selected = pageIds.split(',').indexOf($.mobile.activePage.id) != -1
+            }
+
+            if (selected) {
+                link.classList.add('selectedSidebarLink');
+
+                var title = '';
+
+                var secondaryTitle = (link.innerText || link.textContent).trim();
+                title += secondaryTitle;
+
+                var documentTitle = secondaryTitle;
+
+                Dashboard.setPageTitle(title, documentTitle);
+
+            } else {
+                link.classList.remove('selectedSidebarLink');
+            }
+        }
+    }
+
+    function createDashboardMenu() {
+        var html = '';
+
+        html += '<a class="adminDrawerLogo clearLink" href="home.html">'
+        html += '<img src="css/images/logo.png" />';
+        html += '</a>';
+
+        html += Dashboard.getToolsMenuHtml();
+
+        html = html.split('href=').join('onclick="return LibraryMenu.onLinkClicked(event, this);" href=');
+
+        mainDrawerPanel.querySelector('.mainDrawer').innerHTML = html;
+
+        updateDashboardMenuSelectedItem();
     }
 
     function onSidebarLinkClick() {
@@ -423,21 +484,13 @@
                     view.icon = 'live-tv';
                     view.onclick = "LibraryBrowser.showTab('livetv.html', 0);";
 
-                    var guideView = $.extend({}, view);
+                    var guideView = Object.assign({}, view);
                     guideView.Name = Globalize.translate('ButtonGuide');
                     guideView.ImageTags = {};
                     guideView.icon = 'dvr';
                     guideView.url = 'livetv.html?tab=1';
                     guideView.onclick = "LibraryBrowser.showTab('livetv.html', 1);";
                     list.push(guideView);
-
-                    var recordedTvView = $.extend({}, view);
-                    recordedTvView.Name = Globalize.translate('ButtonRecordedTv');
-                    recordedTvView.ImageTags = {};
-                    recordedTvView.icon = 'video-library';
-                    recordedTvView.url = 'livetv.html?tab=3';
-                    recordedTvView.onclick = "LibraryBrowser.showTab('livetv.html', 3);";
-                    list.push(recordedTvView);
                 }
             }
 
@@ -445,19 +498,42 @@
         });
     }
 
+    function showBySelector(selector, show) {
+        var elem = document.querySelector(selector);
+
+        if (elem) {
+            if (show) {
+                elem.classList.remove('hide');
+            } else {
+                elem.classList.add('hide');
+            }
+        }
+    }
+
     function updateLibraryMenu(user) {
 
         if (!user) {
 
-            $('.adminMenuOptions').addClass('hide');
-            $('.lnkMySync').addClass('hide');
-            $('.userMenuOptions').addClass('hide');
+            showBySelector('.lnkMySync', false);
+            showBySelector('.userMenuOptions', false);
             return;
+        }
+
+        if (user.Policy.EnableSync) {
+            showBySelector('.lnkMySync', true);
+        } else {
+            showBySelector('.lnkMySync', false);
         }
 
         var userId = Dashboard.getCurrentUserId();
 
         var apiClient = window.ApiClient;
+
+        var libraryMenuOptions = document.querySelector('.libraryMenuOptions');
+
+        if (!libraryMenuOptions) {
+            return;
+        }
 
         getUserViews(apiClient, userId).then(function (result) {
 
@@ -525,31 +601,16 @@
 
             }).join('');
 
-            var libraryMenuOptions = document.querySelector('.libraryMenuOptions');
             libraryMenuOptions.innerHTML = html;
             var elem = libraryMenuOptions;
 
-            $('.sidebarLink', elem).off('click', onSidebarLinkClick).on('click', onSidebarLinkClick);
+            var sidebarLinks = elem.querySelectorAll('.sidebarLink');
+            for (var i = 0, length = sidebarLinks.length; i < length; i++) {
+                sidebarLinks[i].removeEventListener('click', onSidebarLinkClick);
+                sidebarLinks[i].addEventListener('click', onSidebarLinkClick);
+            }
         });
-
-        if (user.Policy.IsAdministrator) {
-            $('.adminMenuOptions').removeClass('hide');
-        } else {
-            $('.adminMenuOptions').addClass('hide');
-        }
-
-        if (user.Policy.EnableSync) {
-            $('.lnkMySync').removeClass('hide');
-        } else {
-            $('.lnkMySync').addClass('hide');
-        }
     }
-
-    function showUserAtTop() {
-        return AppInfo.isNativeApp;
-    }
-
-    var requiresLibraryMenuRefresh = false;
 
     function onManageServerClicked() {
 
@@ -615,7 +676,7 @@
         },
 
         onHardwareMenuButtonClick: function () {
-            openMainDrawer();
+            toggleMainDrawer();
         },
 
         onSettingsClicked: function (event) {
@@ -629,8 +690,65 @@
             return false;
         },
 
+        setTabs: function (type, selectedIndex, builder) {
+
+            var viewMenuBarTabs;
+
+            if (!type) {
+                if (LibraryMenu.tabType) {
+
+                    mainDrawerPanel.classList.remove('withTallToolbar');
+                    viewMenuBarTabs = document.querySelector('.viewMenuBarTabs');
+                    viewMenuBarTabs.innerHTML = '';
+                    viewMenuBarTabs.classList.add('hide');
+                    LibraryMenu.tabType = null;
+                }
+                return;
+            }
+
+            viewMenuBarTabs = document.querySelector('.viewMenuBarTabs');
+
+            if (!LibraryMenu.tabType) {
+                viewMenuBarTabs.classList.remove('hide');
+            }
+
+            if (LibraryMenu.tabType != type) {
+
+                require(['paper-tabs'], function () {
+
+                    var noInk = browserInfo.animate ? '' : ' noink';
+
+                    viewMenuBarTabs.innerHTML = '<paper-tabs selected="' + selectedIndex + '" hidescrollbuttons ' + noInk + '>' + builder().map(function (t) {
+
+                        return '<paper-tab link><a class="clearLink paperTabLink" href="' + t.href + '"><div>' + t.name + '</div></a></paper-tab>';
+
+                    }).join('') + '</paper-tabs>';
+                    mainDrawerPanel.classList.add('withTallToolbar');
+                    LibraryMenu.tabType = type;
+                });
+                return;
+            }
+
+            viewMenuBarTabs.querySelector('paper-tabs').selected = selectedIndex;
+            LibraryMenu.tabType = type;
+        },
+
         setTitle: function (title) {
-            document.querySelector('.libraryMenuButtonText').innerHTML = title;
+
+            var html = title;
+
+            if (window.$ && $.mobile) {
+                var page = $.mobile.activePage;
+                if (page) {
+                    var helpUrl = page.getAttribute('data-helpurl');
+
+                    if (helpUrl) {
+                        html += '<a href="' + helpUrl + '" target="_blank" class="clearLink" style="margin-left:2em;" title="' + Globalize.translate('ButtonHelp') + '"><paper-button class="accent" style="margin:0;font-weight:normal;font-size:13px;padding:.25em;display:flex;align-items:center;"><iron-icon icon="info"></iron-icon><span>Help</span></paper-button></a>';
+                    }
+                }
+            }
+
+            document.querySelector('.libraryMenuButtonText').innerHTML = html;
         },
 
         setBackButtonVisible: function (visible) {
@@ -678,18 +796,22 @@
 
         var btnCast = context.querySelector('.btnCast');
 
+        if (!btnCast) {
+            return;
+        }
+
         var info = MediaController.getPlayerInfo();
 
         if (info.isLocalPlayer) {
 
-            btnCast.icon = 'cast';
+            btnCast.querySelector('iron-icon').icon = 'cast';
             btnCast.classList.remove('btnActiveCast');
 
             context.querySelector('.headerSelectedPlayer').innerHTML = '';
 
         } else {
 
-            btnCast.icon = 'cast-connected';
+            btnCast.querySelector('iron-icon').icon = 'cast-connected';
             btnCast.classList.add('btnActiveCast');
             context.querySelector('.headerSelectedPlayer').innerHTML = info.deviceName || info.name;
         }
@@ -774,19 +896,27 @@
 
             if (msg.Data.Id == Dashboard.getCurrentUserId()) {
 
-                requiresLibraryMenuRefresh = true;
+                // refresh library menu
             }
         }
     }
 
-    function buildViewMenuBar(page) {
+    function updateViewMenuBar(page) {
 
         var viewMenuBar = document.querySelector('.viewMenuBar');
 
-        if (page.classList.contains('standalonePage')) {
-            viewMenuBar.classList.add('hide');
-        } else {
-            viewMenuBar.classList.remove('hide');
+        if (viewMenuBar) {
+            if (page.classList.contains('standalonePage')) {
+                viewMenuBar.classList.add('hide');
+            } else {
+                viewMenuBar.classList.remove('hide');
+            }
+
+            if (page.classList.contains('type-interior') && !layoutManager.mobile) {
+                viewMenuBar.classList.add('headroomDisabled');
+            } else {
+                viewMenuBar.classList.remove('headroomDisabled');
+            }
         }
 
         if (requiresUserRefresh) {
@@ -809,39 +939,53 @@
         }
     });
 
-    pageClassOn('pagebeforeshow', 'page', function () {
+    pageClassOn('pagebeforeshow', 'page', function (e) {
 
         var page = this;
 
-        if (page.classList.contains('type-interior')) {
-            requiresDashboardDrawerRefresh = true;
+        if (!page.classList.contains('withTabs')) {
+            LibraryMenu.setTabs(null);
         }
-
-        buildViewMenuBar(page);
-        updateTabLinks(page);
     });
 
-    pageClassOn('pageshow', 'page', function () {
+    pageClassOn('pageshow', 'page', function (e) {
 
         var page = this;
 
-        if (!NavHelper.isBack()) {
+        var isDashboardPage = page.classList.contains('type-interior');
+
+        if (isDashboardPage) {
+            refreshDashboardInfoInDrawer(page);
+            mainDrawerPanel.forceNarrow = false;
+        } else {
+
+            if (mainDrawerPanel.classList.contains('adminDrawerPanel')) {
+                refreshLibraryDrawer();
+            }
+
+            mainDrawerPanel.forceNarrow = true;
+        }
+
+        setDrawerClass(page);
+
+        updateViewMenuBar(page);
+        updateTabLinks(page);
+
+        if (!e.detail.isRestored) {
             // Scroll back up so in case vertical scroll was messed with
-            window.scrollTo(0, 0);
+            //window.scrollTo(0, 0);
         }
 
         updateTitle(page);
         updateBackButton(page);
 
-        var isLibraryPage = page.classList.contains('libraryPage');
-
-        if (isLibraryPage) {
+        if (page.classList.contains('libraryPage')) {
 
             document.body.classList.add('libraryDocument');
             document.body.classList.remove('dashboardDocument');
             document.body.classList.remove('hideMainDrawer');
         }
-        else if (page.classList.contains('type-interior')) {
+        else if (isDashboardPage) {
 
             document.body.classList.remove('libraryDocument');
             document.body.classList.add('dashboardDocument');
@@ -853,6 +997,8 @@
             document.body.classList.remove('dashboardDocument');
             document.body.classList.add('hideMainDrawer');
         }
+
+        updateLibraryNavLinks(page);
     });
 
     function updateTitle(page) {
@@ -863,12 +1009,6 @@
 
             if (titleKey) {
                 title = Globalize.translate(titleKey);
-            }
-        }
-
-        if (!title) {
-            if (page.classList.contains('type-interior')) {
-                title = Globalize.translate('ButtonHome');
             }
         }
 
@@ -904,7 +1044,7 @@
             return;
         }
 
-        requirejs(["headroom"], function () {
+        require(["headroom"], function () {
 
             // construct an instance of Headroom, passing the element
             var headroom = new Headroom(elem, {
@@ -916,13 +1056,11 @@
             });
             // initialise
             headroom.init();
-            elem.classList.add('headroomEnabled');
         });
     }
 
     function initializeApiClient(apiClient) {
 
-        requiresLibraryMenuRefresh = true;
         Events.off(apiClient, 'websocketmessage', onWebSocketMessage);
 
         Events.on(apiClient, 'websocketmessage', onWebSocketMessage);
@@ -932,63 +1070,76 @@
         initializeApiClient(window.ApiClient);
     }
 
-    function setDrawerClass() {
+    function setDrawerClass(page) {
 
-        var drawer = document.querySelector('.mainDrawerPanel #drawer');
-        if (drawer) {
-            drawer.classList.add('darkDrawer');
+        var admin = false;
+
+        if (!page) {
+            if (window.$ && window.$.mobile) {
+                page = $.mobile.activePage;
+            }
+        }
+
+        if (page && page.classList.contains('type-interior')) {
+            admin = true;
+        }
+
+        if (admin) {
+            mainDrawerPanel.classList.add('adminDrawerPanel');
+            mainDrawerPanel.classList.remove('darkDrawerPanel');
+        } else {
+            mainDrawerPanel.classList.add('darkDrawerPanel');
+            mainDrawerPanel.classList.remove('adminDrawerPanel');
         }
     }
 
-    var mainDrawerPanel = document.querySelector('.mainDrawerPanel');
-    mainDrawerPanel.addEventListener('iron-select', onMainDrawerSelect);
+    function refreshLibraryDrawer(user) {
 
-    renderHeader();
+        var promise = user ? Promise.resolve(user) : ConnectionManager.user(window.ApiClient);
+
+        promise.then(function (user) {
+            refreshLibraryInfoInDrawer(user);
+
+            document.dispatchEvent(new CustomEvent("libraryMenuCreated", {}));
+            updateLibraryMenu(user.localUser);
+        });
+    }
+
+    mainDrawerPanel.addEventListener('iron-select', onMainDrawerSelect);
+    var headerCreated;
+    var userRequiresUpdateAfterHeader;
+
+    require(['paper-icon-button-light', 'emby-icons'], function () {
+        renderHeader();
+        headerCreated = true;
+
+        var user = userRequiresUpdateAfterHeader;
+        if (user) {
+            updateUserInHeader(user);
+        }
+        userRequiresUpdateAfterHeader = null;
+    });
 
     Events.on(ConnectionManager, 'apiclientcreated', function (e, apiClient) {
         initializeApiClient(apiClient);
     });
 
     Events.on(ConnectionManager, 'localusersignedin', function (e, user) {
-        requiresLibraryMenuRefresh = true;
-        requiresDrawerRefresh = true;
         setDrawerClass();
-        ConnectionManager.user(ConnectionManager.getApiClient(user.ServerId)).then(updateUserInHeader);
+        ConnectionManager.user(ConnectionManager.getApiClient(user.ServerId)).then(function (user) {
+            refreshLibraryDrawer(user);
+
+            if (headerCreated) {
+                updateUserInHeader(user);
+            } else {
+                userRequiresUpdateAfterHeader = user;
+            }
+        });
     });
 
-    Events.on(ConnectionManager, 'localusersignedout', function () {
-        requiresLibraryMenuRefresh = true;
-        requiresDrawerRefresh = true;
-        updateUserInHeader();
-    });
-
-    Events.on(MediaController, 'playerchange', function () {
-        updateCastIcon();
-    });
+    Events.on(ConnectionManager, 'localusersignedout', updateUserInHeader);
+    Events.on(MediaController, 'playerchange', updateCastIcon);
 
     setDrawerClass();
 
-})(window, document, jQuery, window.devicePixelRatio);
-
-(function () {
-
-    var isCurrentNavBack = false;
-
-    window.addEventListener("navigate", function (e) {
-
-        var data = e.detail.state || {};
-        var direction = data.direction;
-
-        isCurrentNavBack = direction == 'back';
-    });
-
-    function isBack() {
-
-        return isCurrentNavBack;
-    }
-
-    window.NavHelper = {
-        isBack: isBack
-    };
-
-})();
+});

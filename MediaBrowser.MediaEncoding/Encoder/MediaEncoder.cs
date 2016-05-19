@@ -1,4 +1,3 @@
-using MediaBrowser.Common.IO;
 using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Library;
@@ -9,7 +8,6 @@ using MediaBrowser.MediaEncoding.Probing;
 using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Extensions;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.MediaInfo;
@@ -98,20 +96,42 @@ namespace MediaBrowser.MediaEncoding.Encoder
             FFMpegPath = ffMpegPath;
         }
 
+        private List<string> _encoders = new List<string>();
         public void SetAvailableEncoders(List<string> list)
         {
-
+            _encoders = list.ToList();
+            //_logger.Info("Supported encoders: {0}", string.Join(",", list.ToArray()));
         }
 
         private List<string> _decoders = new List<string>();
         public void SetAvailableDecoders(List<string> list)
         {
             _decoders = list.ToList();
+            //_logger.Info("Supported decoders: {0}", string.Join(",", list.ToArray()));
+        }
+
+        public bool SupportsEncoder(string decoder)
+        {
+            return _encoders.Contains(decoder, StringComparer.OrdinalIgnoreCase);
         }
 
         public bool SupportsDecoder(string decoder)
         {
             return _decoders.Contains(decoder, StringComparer.OrdinalIgnoreCase);
+        }
+
+        public bool CanEncodeToAudioCodec(string codec)
+        {
+            if (string.Equals(codec, "opus", StringComparison.OrdinalIgnoreCase))
+            {
+                codec = "libopus";
+            }
+            else if (string.Equals(codec, "mp3", StringComparison.OrdinalIgnoreCase))
+            {
+                codec = "libmp3lame";
+            }
+
+            return SupportsEncoder(codec);
         }
 
         /// <summary>
@@ -129,7 +149,7 @@ namespace MediaBrowser.MediaEncoding.Encoder
         /// <param name="request">The request.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>Task.</returns>
-        public Task<Model.MediaInfo.MediaInfo> GetMediaInfo(MediaInfoRequest request, CancellationToken cancellationToken)
+        public Task<MediaInfo> GetMediaInfo(MediaInfoRequest request, CancellationToken cancellationToken)
         {
             var extractChapters = request.MediaType == DlnaProfileType.Video && request.ExtractChapters;
 
@@ -175,7 +195,7 @@ namespace MediaBrowser.MediaEncoding.Encoder
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>Task{MediaInfoResult}.</returns>
         /// <exception cref="System.ApplicationException">ffprobe failed - streams and format are both null.</exception>
-        private async Task<Model.MediaInfo.MediaInfo> GetMediaInfoInternal(string inputPath,
+        private async Task<MediaInfo> GetMediaInfoInternal(string inputPath,
             string primaryPath,
             MediaProtocol protocol,
             bool extractChapters,
@@ -293,12 +313,12 @@ namespace MediaBrowser.MediaEncoding.Encoder
             }
 
             var formats = (video.Container ?? string.Empty).Split(',').ToList();
-            var enableInterlacedDection = formats.Contains("vob", StringComparer.OrdinalIgnoreCase) &&
-                                          formats.Contains("m2ts", StringComparer.OrdinalIgnoreCase) &&
-                                          formats.Contains("ts", StringComparer.OrdinalIgnoreCase) &&
-                                          formats.Contains("mpegts", StringComparer.OrdinalIgnoreCase) &&
+            var enableInterlacedDection = formats.Contains("vob", StringComparer.OrdinalIgnoreCase) ||
+                                          formats.Contains("m2ts", StringComparer.OrdinalIgnoreCase) ||
+                                          formats.Contains("ts", StringComparer.OrdinalIgnoreCase) ||
+                                          formats.Contains("mpegts", StringComparer.OrdinalIgnoreCase) ||
                                           formats.Contains("wtv", StringComparer.OrdinalIgnoreCase);
-            
+
             // If it's mpeg based, assume true
             if ((videoStream.Codec ?? string.Empty).IndexOf("mpeg", StringComparison.OrdinalIgnoreCase) != -1)
             {
@@ -486,10 +506,14 @@ namespace MediaBrowser.MediaEncoding.Encoder
             return ExtractImage(new[] { path }, imageStreamIndex, MediaProtocol.File, true, null, null, cancellationToken);
         }
 
-        public Task<Stream> ExtractVideoImage(string[] inputFiles, MediaProtocol protocol, Video3DFormat? threedFormat,
-            TimeSpan? offset, CancellationToken cancellationToken)
+        public Task<Stream> ExtractVideoImage(string[] inputFiles, MediaProtocol protocol, Video3DFormat? threedFormat, TimeSpan? offset, CancellationToken cancellationToken)
         {
             return ExtractImage(inputFiles, null, protocol, false, threedFormat, offset, cancellationToken);
+        }
+
+        public Task<Stream> ExtractVideoImage(string[] inputFiles, MediaProtocol protocol, int? imageStreamIndex, CancellationToken cancellationToken)
+        {
+            return ExtractImage(inputFiles, imageStreamIndex, protocol, false, null, null, cancellationToken);
         }
 
         private async Task<Stream> ExtractImage(string[] inputFiles, int? imageStreamIndex, MediaProtocol protocol, bool isAudio,
@@ -934,7 +958,13 @@ namespace MediaBrowser.MediaEncoding.Encoder
                     _mediaEncoder._runningProcesses.Remove(this);
                 }
 
-                process.Dispose();
+                try
+                {
+                    process.Dispose();
+                }
+                catch (Exception ex)
+                {
+                }
             }
 
             private bool _disposed;

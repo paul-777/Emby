@@ -51,13 +51,20 @@ namespace MediaBrowser.Server.Implementations.EntryPoints
 
             data["plugins"] = string.Join(",", _applicationHost.Plugins.Select(i => i.Id).ToArray());
 
+            var logErrors = false;
+#if DEBUG
+            logErrors = true;
+#endif
             var options = new HttpRequestOptions
             {
                 Url = MbAdminUrl + "service/registration/ping",
                 CancellationToken = cancellationToken,
 
                 // Seeing block length errors
-                EnableHttpCompression = false
+                EnableHttpCompression = false,
+
+                LogRequest = false,
+                LogErrors = logErrors
             };
 
             options.SetPostData(data);
@@ -93,13 +100,21 @@ namespace MediaBrowser.Server.Implementations.EntryPoints
                 { "platform", app.DeviceName }, 
             };
 
+            var logErrors = false;
+
+#if DEBUG
+            logErrors = true;
+#endif
             var options = new HttpRequestOptions
             {
                 Url = MbAdminUrl + "service/registration/ping",
                 CancellationToken = cancellationToken,
 
                 // Seeing block length errors
-                EnableHttpCompression = false
+                EnableHttpCompression = false,
+
+                LogRequest = false,
+                LogErrors = logErrors
             };
 
             options.SetPostData(data);

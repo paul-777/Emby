@@ -6,7 +6,6 @@ using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Session;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 
 namespace MediaBrowser.Model.Dlna
 {
@@ -31,13 +30,15 @@ namespace MediaBrowser.Model.Dlna
         public string VideoCodec { get; set; }
         public string VideoProfile { get; set; }
 
-        public bool? Cabac { get; set; }
+        public bool CopyTimestamps { get; set; }
+        public bool ForceLiveStream { get; set; }
         public string AudioCodec { get; set; }
 
         public int? AudioStreamIndex { get; set; }
 
         public int? SubtitleStreamIndex { get; set; }
 
+        public int? TranscodingMaxAudioChannels { get; set; }
         public int? MaxAudioChannels { get; set; }
 
         public int? AudioBitrate { get; set; }
@@ -193,7 +194,7 @@ namespace MediaBrowser.Model.Dlna
             list.Add(new NameValuePair("DeviceProfileId", item.DeviceProfileId ?? string.Empty));
             list.Add(new NameValuePair("DeviceId", item.DeviceId ?? string.Empty));
             list.Add(new NameValuePair("MediaSourceId", item.MediaSourceId ?? string.Empty));
-            list.Add(new NameValuePair("Static", (item.IsDirectStream).ToString().ToLower()));
+            list.Add(new NameValuePair("Static", item.IsDirectStream.ToString().ToLower()));
             list.Add(new NameValuePair("VideoCodec", item.VideoCodec ?? string.Empty));
             list.Add(new NameValuePair("AudioCodec", item.AudioCodec ?? string.Empty));
             list.Add(new NameValuePair("AudioStreamIndex", item.AudioStreamIndex.HasValue ? StringHelper.ToStringCultureInvariant(item.AudioStreamIndex.Value) : string.Empty));
@@ -205,7 +206,7 @@ namespace MediaBrowser.Model.Dlna
             list.Add(new NameValuePair("MaxWidth", item.MaxWidth.HasValue ? StringHelper.ToStringCultureInvariant(item.MaxWidth.Value) : string.Empty));
             list.Add(new NameValuePair("MaxHeight", item.MaxHeight.HasValue ? StringHelper.ToStringCultureInvariant(item.MaxHeight.Value) : string.Empty));
 
-            if (StringHelper.EqualsIgnoreCase(item.SubProtocol, "hls"))
+            if (StringHelper.EqualsIgnoreCase(item.SubProtocol, "hls") && !item.ForceLiveStream)
             {
                 list.Add(new NameValuePair("StartTimeTicks", string.Empty));
             }
@@ -219,7 +220,9 @@ namespace MediaBrowser.Model.Dlna
             list.Add(new NameValuePair("MaxRefFrames", item.MaxRefFrames.HasValue ? StringHelper.ToStringCultureInvariant(item.MaxRefFrames.Value) : string.Empty));
             list.Add(new NameValuePair("MaxVideoBitDepth", item.MaxVideoBitDepth.HasValue ? StringHelper.ToStringCultureInvariant(item.MaxVideoBitDepth.Value) : string.Empty));
             list.Add(new NameValuePair("Profile", item.VideoProfile ?? string.Empty));
-            list.Add(new NameValuePair("Cabac", item.Cabac.HasValue ? item.Cabac.Value.ToString() : string.Empty));
+
+            // no longer used
+            list.Add(new NameValuePair("Cabac", string.Empty));
 
             list.Add(new NameValuePair("PlaySessionId", item.PlaySessionId ?? string.Empty));
             list.Add(new NameValuePair("api_key", accessToken ?? string.Empty));
@@ -231,7 +234,13 @@ namespace MediaBrowser.Model.Dlna
             {
                 list.Add(new NameValuePair("ItemId", item.ItemId));
             }
-            
+
+            list.Add(new NameValuePair("CopyTimestamps", item.CopyTimestamps.ToString().ToLower()));
+            list.Add(new NameValuePair("ForceLiveStream", item.ForceLiveStream.ToString().ToLower()));
+            list.Add(new NameValuePair("SubtitleMethod", item.SubtitleStreamIndex.HasValue && item.SubtitleDeliveryMethod != SubtitleDeliveryMethod.External ? item.SubtitleDeliveryMethod.ToString() : string.Empty));
+
+            list.Add(new NameValuePair("TranscodingMaxAudioChannels", item.TranscodingMaxAudioChannels.HasValue ? StringHelper.ToStringCultureInvariant(item.TranscodingMaxAudioChannels.Value) : string.Empty));
+
             return list;
         }
 
@@ -269,7 +278,7 @@ namespace MediaBrowser.Model.Dlna
             // HLS will preserve timestamps so we can just grab the full subtitle stream
             long startPositionTicks = StringHelper.EqualsIgnoreCase(SubProtocol, "hls")
                 ? 0
-				: (this.PlayMethod == PlayMethod.Transcode ? StartPositionTicks : 0);
+				: (PlayMethod == PlayMethod.Transcode && !CopyTimestamps ? StartPositionTicks : 0);
 
             // First add the selected track
             if (SubtitleStreamIndex.HasValue)
@@ -318,7 +327,7 @@ namespace MediaBrowser.Model.Dlna
 
         private SubtitleStreamInfo GetSubtitleStreamInfo(MediaStream stream, string baseUrl, string accessToken, long startPositionTicks, SubtitleProfile[] subtitleProfiles)
         {
-            SubtitleProfile subtitleProfile = StreamBuilder.GetSubtitleProfile(stream, subtitleProfiles, Context, PlayMethod);
+            SubtitleProfile subtitleProfile = StreamBuilder.GetSubtitleProfile(stream, subtitleProfiles, PlayMethod);
             SubtitleStreamInfo info = new SubtitleStreamInfo
             {
                 IsForced = stream.IsForced,
@@ -340,6 +349,11 @@ namespace MediaBrowser.Model.Dlna
                         StringHelper.ToStringCultureInvariant(stream.Index),
                         StringHelper.ToStringCultureInvariant(startPositionTicks),
                         subtitleProfile.Format);
+
+                    if (!string.IsNullOrEmpty(accessToken))
+                    {
+                        info.Url += "?api_key=" + accessToken;
+                    }
 
                     info.IsExternalUrl = false;
                 }
@@ -621,19 +635,6 @@ namespace MediaBrowser.Model.Dlna
                 }
 
                 return false;
-            }
-        }
-
-        public bool? IsTargetCabac
-        {
-            get
-            {
-                if (IsDirectStream)
-                {
-                    return TargetVideoStream == null ? null : TargetVideoStream.IsCabac;
-                }
-
-                return true;
             }
         }
 

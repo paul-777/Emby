@@ -1,5 +1,4 @@
-﻿using MediaBrowser.Common.IO;
-using MediaBrowser.Common.Net;
+﻿using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Configuration;
@@ -21,7 +20,7 @@ namespace MediaBrowser.Providers.Movies
 {
     class FanartMovieUpdatesPostScanTask : ILibraryPostScanTask
     {
-        private const string UpdatesUrl = "http://webservice.fanart.tv/v3/movies/latest?api_key={0}&date={1}";
+        private const string UpdatesUrl = "https://webservice.fanart.tv/v3/movies/latest?api_key={0}&date={1}";
 
         /// <summary>
         /// The _HTTP client

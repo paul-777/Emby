@@ -85,8 +85,6 @@ namespace MediaBrowser.XbmcMetadata.Parsers
         /// <param name="cancellationToken">The cancellation token.</param>
         private void Fetch(MetadataResult<T> item, string metadataFile, XmlReaderSettings settings, CancellationToken cancellationToken)
         {
-            item.ResetPeople();
-
             if (!SupportsUrlAfterClosingXmlTag)
             {
                 using (var streamReader = BaseNfoSaver.GetStreamReader(metadataFile))
@@ -94,6 +92,8 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                     // Use XmlReader for best performance
                     using (var reader = XmlReader.Create(streamReader, settings))
                     {
+                        item.ResetPeople();
+
                         reader.MoveToContent();
 
                         // Loop through each element
@@ -113,6 +113,8 @@ namespace MediaBrowser.XbmcMetadata.Parsers
 
             using (var streamReader = BaseNfoSaver.GetStreamReader(metadataFile))
             {
+                item.ResetPeople();
+
                 // Need to handle a url after the xml data
                 // http://kodi.wiki/view/NFO_files/movies
 
@@ -180,7 +182,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                     }
                     catch (XmlException)
                     {
-                        
+
                     }
                 }
             }
@@ -195,8 +197,20 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                 item.SetProviderId(MetadataProviders.Imdb, m.Value);
             }
 
-            // TODO: Support Tmdb
+            // Support Tmdb
             // http://www.themoviedb.org/movie/36557
+            var srch = "themoviedb.org/movie/";
+            var index = xml.IndexOf(srch, StringComparison.OrdinalIgnoreCase);
+
+            if (index != -1)
+            {
+                var tmdbId = xml.Substring(index + srch.Length).TrimEnd('/');
+                int value;
+                if (!string.IsNullOrWhiteSpace(tmdbId) && int.TryParse(tmdbId, NumberStyles.Any, CultureInfo.InvariantCulture, out value))
+                {
+                    item.SetProviderId(MetadataProviders.Tmdb, tmdbId);
+                }
+            }
         }
 
         protected virtual void FetchDataFromXmlNode(XmlReader reader, MetadataResult<T> itemResult)
@@ -648,8 +662,8 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         {
                             if (!string.IsNullOrWhiteSpace(val))
                             {
-                                val = val.Replace("plugin://plugin.video.youtube/?action=play_video&videoid=", "http://www.youtube.com/watch?v=", StringComparison.OrdinalIgnoreCase);
-                                
+                                val = val.Replace("plugin://plugin.video.youtube/?action=play_video&videoid=", "https://www.youtube.com/watch?v=", StringComparison.OrdinalIgnoreCase);
+
                                 hasTrailer.AddTrailerUrl(val, false);
                             }
                         }
@@ -848,6 +862,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                     break;
 
                 case "collectionnumber":
+                case "tmdbcolid":
                     var tmdbCollection = reader.ReadElementContentAsString();
                     if (!string.IsNullOrWhiteSpace(tmdbCollection))
                     {

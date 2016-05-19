@@ -1,10 +1,12 @@
-﻿(function () {
+﻿define(['jQuery'], function ($) {
 
     function changeCollectionType(page, virtualFolder) {
 
-        Dashboard.alert({
-            message: Globalize.translate('HeaderChangeFolderTypeHelp'),
-            title: Globalize.translate('HeaderChangeFolderType')
+        require(['alert'], function (alert) {
+            alert({
+                title: Globalize.translate('HeaderChangeFolderType'),
+                text: Globalize.translate('HeaderChangeFolderTypeHelp')
+            });
         });
     }
 
@@ -53,17 +55,16 @@
             msg += virtualFolder.Locations.join("<br/>");
         }
 
-        Dashboard.confirm(msg, Globalize.translate('HeaderRemoveMediaFolder'), function (confirmResult) {
+        require(['confirm'], function (confirm) {
 
-            if (confirmResult) {
+            confirm(msg, Globalize.translate('HeaderRemoveMediaFolder')).then(function () {
 
                 var refreshAfterChange = shouldRefreshLibraryAfterChanges(page);
 
                 ApiClient.removeVirtualFolder(virtualFolder.Name, refreshAfterChange).then(function () {
                     reloadLibrary(page);
                 });
-            }
-
+            });
         });
     }
 
@@ -72,17 +73,16 @@
         require(['prompt'], function (prompt) {
 
             prompt({
-                title: Globalize.translate('LabelNewName'),
-                callback: function (newName) {
+                label: Globalize.translate('LabelNewName')
 
-                    if (newName && newName != virtualFolder.Name) {
+            }).then(function (newName) {
+                if (newName && newName != virtualFolder.Name) {
 
-                        var refreshAfterChange = shouldRefreshLibraryAfterChanges(page);
+                    var refreshAfterChange = shouldRefreshLibraryAfterChanges(page);
 
-                        ApiClient.renameVirtualFolder(virtualFolder.Name, newName, refreshAfterChange).then(function () {
-                            reloadLibrary(page);
-                        });
-                    }
+                    ApiClient.renameVirtualFolder(virtualFolder.Name, newName, refreshAfterChange).then(function () {
+                        reloadLibrary(page);
+                    });
                 }
             });
 
@@ -101,6 +101,12 @@
             name: Globalize.translate('ButtonChangeContentType'),
             id: 'changetype',
             ironIcon: 'videocam'
+        });
+
+        menuItems.push({
+            name: Globalize.translate('ButtonEditImages'),
+            id: 'editimages',
+            ironIcon: 'photo'
         });
 
         menuItems.push({
@@ -135,6 +141,9 @@
                             break;
                         case 'edit':
                             editVirtualFolder(page, virtualFolder);
+                            break;
+                        case 'editimages':
+                            editImages(page, virtualFolder);
                             break;
                         case 'rename':
                             renameVirtualFolder(page, virtualFolder);
@@ -206,19 +215,24 @@
                 return;
             }
 
-            require(['components/imageeditor/imageeditor'], function (ImageEditor) {
-
-                ImageEditor.show(virtualFolder.ItemId, {
-                    theme: 'a'
-                }).then(function (hasChanged) {
-                    if (hasChanged) {
-                        reloadLibrary(page);
-                    }
-                });
-            });
+            editVirtualFolder(page, virtualFolder);
         });
 
         Dashboard.hideLoadingMsg();
+    }
+
+    function editImages(page, virtualFolder) {
+
+        require(['components/imageeditor/imageeditor'], function (ImageEditor) {
+
+            ImageEditor.show(virtualFolder.ItemId, {
+                theme: 'a'
+            }).then(function (hasChanged) {
+                if (hasChanged) {
+                    reloadLibrary(page);
+                }
+            });
+        });
     }
 
     function getCollectionTypeOptions() {
@@ -332,7 +346,7 @@
 
         if (virtualFolder.showMenu !== false) {
             html += '<div class="cardText" style="text-align:right; float:right;padding-top:5px;">';
-            html += '<paper-icon-button icon="' + AppInfo.moreIcon + '" class="btnCardMenu"></paper-icon-button>';
+            html += '<button type="button" is="paper-icon-button-light" class="btnCardMenu"><iron-icon icon="' + AppInfo.moreIcon + '"></iron-icon></button>';
             html += "</div>";
         }
 
@@ -419,6 +433,42 @@
         });
     });
 
+    window.WizardLibraryPage = {
+
+        next: function () {
+
+            Dashboard.showLoadingMsg();
+
+            var apiClient = ApiClient;
+
+            apiClient.ajax({
+                type: "POST",
+                url: apiClient.getUrl('System/Configuration/MetadataPlugins/Autoset')
+
+            }).then(function () {
+
+                Dashboard.hideLoadingMsg();
+                Dashboard.navigate('wizardsettings.html');
+            });
+        }
+    };
+
+    function getTabs() {
+        return [
+        {
+            href: 'library.html',
+            name: Globalize.translate('TabFolders')
+        },
+         {
+             href: 'librarypathmapping.html',
+             name: Globalize.translate('TabPathSubstitution')
+         },
+         {
+             href: 'librarysettings.html',
+             name: Globalize.translate('TabAdvanced')
+         }];
+    }
+
     pageClassOn('pageshow', "mediaLibraryPage", function () {
 
         var page = this;
@@ -426,32 +476,9 @@
 
     });
 
-})();
-
-var WizardLibraryPage = {
-
-    next: function () {
-
-        Dashboard.showLoadingMsg();
-
-        var apiClient = ApiClient;
-
-        apiClient.ajax({
-            type: "POST",
-            url: apiClient.getUrl('System/Configuration/MetadataPlugins/Autoset')
-
-        }).then(function () {
-
-            Dashboard.hideLoadingMsg();
-            Dashboard.navigate('wizardsettings.html');
-        });
-    }
-};
-
-(function ($, document, window) {
-
     pageIdOn('pageshow', "mediaLibraryPage", function () {
 
+        LibraryMenu.setTabs('librarysetup', 0, getTabs);
         var page = this;
 
         // on here
@@ -474,4 +501,4 @@ var WizardLibraryPage = {
 
     });
 
-})(jQuery, document, window);
+});

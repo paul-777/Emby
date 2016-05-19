@@ -1,16 +1,13 @@
 ﻿using MediaBrowser.Controller.Channels;
-using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Localization;
-using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Model.Channels;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Library;
 using MediaBrowser.Model.Querying;
-using MoreLinq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -80,7 +77,7 @@ namespace MediaBrowser.Server.Implementations.Library
                     list.Add(folder);
                     continue;
                 }
-                
+
                 if (collectionFolder != null && UserView.IsEligibleForGrouping(folder) && user.IsFolderGrouped(folder.Id))
                 {
                     groupedFolders.Add(collectionFolder);
@@ -124,7 +121,7 @@ namespace MediaBrowser.Server.Implementations.Library
 
                 var channels = channelResult.Items;
 
-                if (user.Configuration.DisplayChannelsInline && channels.Length > 0)
+                if (user.Configuration.EnableChannelView && channels.Length > 0)
                 {
                     list.Add(await _channelManager.GetInternalChannelFolder(cancellationToken).ConfigureAwait(false));
                 }
@@ -272,9 +269,18 @@ namespace MediaBrowser.Server.Implementations.Library
                     .ToArray();
             }
 
-            var excludeItemTypes = includeItemTypes.Length == 0 ? new[] { "ChannelItem", "LiveTvItem", typeof(Person).Name, typeof(Studio).Name, typeof(Year).Name, typeof(GameGenre).Name, typeof(MusicGenre).Name, typeof(Genre).Name } : new string[] { };
+            if (parentIds.Length == 0)
+            {
+                return new List<BaseItem>();
+            }
 
-            return _libraryManager.GetItems(new InternalItemsQuery(user)
+            var excludeItemTypes = includeItemTypes.Length == 0 ? new[]
+            {
+                typeof(Person).Name, typeof(Studio).Name, typeof(Year).Name, typeof(GameGenre).Name, typeof(MusicGenre).Name, typeof(Genre).Name
+
+            } : new string[] { };
+
+            return _libraryManager.GetItemList(new InternalItemsQuery(user)
             {
                 IncludeItemTypes = includeItemTypes,
                 SortOrder = SortOrder.Descending,
@@ -282,7 +288,8 @@ namespace MediaBrowser.Server.Implementations.Library
                 IsFolder = includeItemTypes.Length == 0 ? false : (bool?)null,
                 ExcludeItemTypes = excludeItemTypes,
                 ExcludeLocationTypes = new[] { LocationType.Virtual },
-                Limit = limit * 20
+                Limit = limit * 20,
+                ExcludeSourceTypes = parentIds.Length == 0 ? new[] { SourceType.Channel, SourceType.LiveTV } : new SourceType[] { }
 
             }, parentIds);
         }

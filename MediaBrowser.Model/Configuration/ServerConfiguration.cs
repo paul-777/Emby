@@ -63,11 +63,11 @@ namespace MediaBrowser.Model.Configuration
         public bool IsPortAuthorized { get; set; }
 
         /// <summary>
-        /// Gets or sets the item by name path.
+        /// Gets or sets a value indicating whether [enable case sensitive item ids].
         /// </summary>
-        /// <value>The item by name path.</value>
-        public string ItemsByNamePath { get; set; }
-
+        /// <value><c>true</c> if [enable case sensitive item ids]; otherwise, <c>false</c>.</value>
+        public bool EnableCaseSensitiveItemIds { get; set; }
+        
         /// <summary>
         /// Gets or sets the metadata path.
         /// </summary>
@@ -182,8 +182,6 @@ namespace MediaBrowser.Model.Configuration
         public PeopleMetadataOptions PeopleMetadataOptions { get; set; }
         public bool FindInternetTrailers { get; set; }
 
-        public string[] InsecureApps9 { get; set; }
-
         public bool SaveMetadataHidden { get; set; }
 
         public NameValuePair[] ContentTypes { get; set; }
@@ -198,13 +196,17 @@ namespace MediaBrowser.Model.Configuration
 
         public int SharingExpirationDays { get; set; }
 
-        public bool EnableWindowsShortcuts { get; set; }
-
         public bool EnableDateLastRefresh { get; set; }
 
         public string[] Migrations { get; set; }
 
         public int MigrationVersion { get; set; }
+        public int SchemaVersion { get; set; }
+
+        public bool DownloadImagesInAdvance { get; set; }
+
+        public bool EnableAnonymousUsageReporting { get; set; }
+        public bool EnableStandaloneMusicKeys { get; set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ServerConfiguration" /> class.
@@ -221,6 +223,7 @@ namespace MediaBrowser.Model.Configuration
             EnableHttps = false;
             EnableDashboardResponseCaching = true;
             EnableDashboardResourceMinification = true;
+            EnableAnonymousUsageReporting = true;
 
             EnableAutomaticRestart = true;
             DenyIFrameEmbedding = true;
@@ -255,11 +258,6 @@ namespace MediaBrowser.Model.Configuration
             UICulture = "en-us";
 
             PeopleMetadataOptions = new PeopleMetadataOptions();
-
-            InsecureApps9 = new[]
-            {
-                "Windows Phone"
-            };
 
             MetadataOptions = new[]
             {

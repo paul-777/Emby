@@ -2,7 +2,6 @@
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
-using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using ServiceStack;
@@ -275,7 +274,7 @@ namespace MediaBrowser.Api.UserLibrary
             {
                 items = items.Where(i =>
                     {
-                        var userdata = UserDataRepository.GetUserData(user.Id, i.GetUserDataKey());
+                        var userdata = UserDataRepository.GetUserData(user, i);
 
                         return userdata != null && userdata.Likes.HasValue && !userdata.Likes.Value;
                     });
@@ -285,7 +284,7 @@ namespace MediaBrowser.Api.UserLibrary
             {
                 items = items.Where(i =>
                 {
-                    var userdata = UserDataRepository.GetUserData(user.Id, i.GetUserDataKey());
+                    var userdata = UserDataRepository.GetUserData(user, i);
 
                     return userdata != null && userdata.Likes.HasValue && userdata.Likes.Value;
                 });
@@ -295,7 +294,7 @@ namespace MediaBrowser.Api.UserLibrary
             {
                 items = items.Where(i =>
                 {
-                    var userdata = UserDataRepository.GetUserData(user.Id, i.GetUserDataKey());
+                    var userdata = UserDataRepository.GetUserData(user, i);
 
                     var likes = userdata.Likes ?? false;
                     var favorite = userdata.IsFavorite;
@@ -308,7 +307,7 @@ namespace MediaBrowser.Api.UserLibrary
             {
                 items = items.Where(i =>
                 {
-                    var userdata = UserDataRepository.GetUserData(user.Id, i.GetUserDataKey());
+                    var userdata = UserDataRepository.GetUserData(user, i);
 
                     return userdata != null && userdata.IsFavorite;
                 });
@@ -332,7 +331,7 @@ namespace MediaBrowser.Api.UserLibrary
                     {
                         return false;
                     }
-                    if (!(tags.Any(v => hasTags.Tags.Contains(v, StringComparer.OrdinalIgnoreCase))))
+                    if (!tags.Any(v => hasTags.Tags.Contains(v, StringComparer.OrdinalIgnoreCase)))
                     {
                         return false;
                     }
@@ -347,7 +346,7 @@ namespace MediaBrowser.Api.UserLibrary
 
                 // Apply genre filter
                 var genres = request.GetGenres();
-                if (genres.Length > 0 && !(genres.Any(v => i.Genres.Contains(v, StringComparer.OrdinalIgnoreCase))))
+                if (genres.Length > 0 && !genres.Any(v => i.Genres.Contains(v, StringComparer.OrdinalIgnoreCase)))
                 {
                     return false;
                 }

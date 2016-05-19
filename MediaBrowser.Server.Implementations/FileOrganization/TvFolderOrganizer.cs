@@ -1,5 +1,4 @@
-﻿using MediaBrowser.Common.IO;
-using MediaBrowser.Controller.Configuration;
+﻿using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.FileOrganization;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
@@ -84,14 +83,14 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
                     }
                     catch (Exception ex)
                     {
-                        _logger.ErrorException("Error organizing episode {0}", ex, file);
+                        _logger.ErrorException("Error organizing episode {0}", ex, file.FullName);
                     }
 
                     numComplete++;
                     double percent = numComplete;
                     percent /= eligibleFiles.Count;
 
-                    progress.Report(10 + (89 * percent));
+                    progress.Report(10 + 89 * percent);
                 }
             }
 
@@ -132,7 +131,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
         {
             try
             {
-				return _fileSystem.GetFiles(path, true)
+                return _fileSystem.GetFiles(path, true)
                     .ToList();
             }
             catch (IOException ex)
@@ -150,7 +149,7 @@ namespace MediaBrowser.Server.Implementations.FileOrganization
         /// <param name="extensions">The extensions.</param>
         private void DeleteLeftOverFiles(string path, IEnumerable<string> extensions)
         {
-			var eligibleFiles = _fileSystem.GetFiles(path, true)
+            var eligibleFiles = _fileSystem.GetFiles(path, true)
                 .Where(i => extensions.Contains(i.Extension, StringComparer.OrdinalIgnoreCase))
                 .ToList();
 

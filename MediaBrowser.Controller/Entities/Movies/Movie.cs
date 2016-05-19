@@ -1,15 +1,13 @@
 ﻿using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Users;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using CommonIO;
-using MediaBrowser.Common.IO;
 
 namespace MediaBrowser.Controller.Entities.Movies
 {
@@ -19,8 +17,6 @@ namespace MediaBrowser.Controller.Entities.Movies
     public class Movie : Video, IHasCriticRating, IHasSpecialFeatures, IHasProductionLocations, IHasBudget, IHasKeywords, IHasTrailers, IHasThemeMedia, IHasTaglines, IHasAwards, IHasMetascore, IHasLookupInfo<MovieInfo>, ISupportsBoxSetGrouping, IHasOriginalTitle
     {
         public List<Guid> SpecialFeatureIds { get; set; }
-
-        public string OriginalTitle { get; set; }
 
         public List<Guid> ThemeSongIds { get; set; }
         public List<Guid> ThemeVideoIds { get; set; }
@@ -68,60 +64,16 @@ namespace MediaBrowser.Controller.Entities.Movies
         public double? Revenue { get; set; }
 
         /// <summary>
-        /// Gets or sets the critic rating.
-        /// </summary>
-        /// <value>The critic rating.</value>
-        public float? CriticRating { get; set; }
-
-        /// <summary>
-        /// Gets or sets the critic rating summary.
-        /// </summary>
-        /// <value>The critic rating summary.</value>
-        public string CriticRatingSummary { get; set; }
-
-        /// <summary>
         /// Gets or sets the name of the TMDB collection.
         /// </summary>
         /// <value>The name of the TMDB collection.</value>
         public string TmdbCollectionName { get; set; }
 
-        /// <summary>
-        /// Gets the trailer ids.
-        /// </summary>
-        /// <returns>List&lt;Guid&gt;.</returns>
-        public List<Guid> GetTrailerIds()
+        [IgnoreDataMember]
+        public string CollectionName
         {
-            var list = LocalTrailerIds.ToList();
-            list.AddRange(RemoteTrailerIds);
-            return list;
-        }
-
-        /// <summary>
-        /// Gets the user data key.
-        /// </summary>
-        /// <returns>System.String.</returns>
-        protected override string CreateUserDataKey()
-        {
-            var key = GetMovieUserDataKey(this);
-
-            if (string.IsNullOrWhiteSpace(key))
-            {
-                key = base.CreateUserDataKey();
-            }
-
-            return key;
-        }
-
-        public static string GetMovieUserDataKey(BaseItem movie)
-        {
-            var key = movie.GetProviderId(MetadataProviders.Tmdb);
-
-            if (string.IsNullOrWhiteSpace(key))
-            {
-                key = movie.GetProviderId(MetadataProviders.Imdb);
-            }
-
-            return key;
+            get { return TmdbCollectionName; }
+            set { TmdbCollectionName = value; }
         }
 
         protected override async Task<bool> RefreshedOwnedItems(MetadataRefreshOptions options, List<FileSystemMetadata> fileSystemChildren, CancellationToken cancellationToken)

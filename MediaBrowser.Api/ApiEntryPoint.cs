@@ -1,6 +1,5 @@
 ﻿using MediaBrowser.Api.Playback;
 using MediaBrowser.Common.Configuration;
-using MediaBrowser.Common.IO;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Plugins;
@@ -63,6 +62,15 @@ namespace MediaBrowser.Api
             _mediaSourceManager = mediaSourceManager;
 
             Instance = this;
+            _sessionManager.PlaybackProgress += _sessionManager_PlaybackProgress;
+        }
+
+        void _sessionManager_PlaybackProgress(object sender, PlaybackProgressEventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(e.PlaySessionId))
+            {
+                PingTranscodingJob(e.PlaySessionId, e.IsPaused);
+            }
         }
 
         /// <summary>
@@ -300,26 +308,31 @@ namespace MediaBrowser.Api
                 PingTimer(job, false);
             }
         }
-        internal void PingTranscodingJob(string playSessionId)
+        internal void PingTranscodingJob(string playSessionId, bool? isUserPaused)
         {
             if (string.IsNullOrEmpty(playSessionId))
             {
                 throw new ArgumentNullException("playSessionId");
             }
 
-            //Logger.Debug("PingTranscodingJob PlaySessionId={0}", playSessionId);
+            //Logger.Debug("PingTranscodingJob PlaySessionId={0} isUsedPaused: {1}", playSessionId, isUserPaused);
 
-            var jobs = new List<TranscodingJob>();
+            List<TranscodingJob> jobs;
 
             lock (_activeTranscodingJobs)
             {
                 // This is really only needed for HLS. 
                 // Progressive streams can stop on their own reliably
-                jobs = jobs.Where(j => string.Equals(playSessionId, j.PlaySessionId, StringComparison.OrdinalIgnoreCase)).ToList();
+                jobs = _activeTranscodingJobs.Where(j => string.Equals(playSessionId, j.PlaySessionId, StringComparison.OrdinalIgnoreCase)).ToList();
             }
 
             foreach (var job in jobs)
             {
+                if (isUserPaused.HasValue)
+                {
+                    //Logger.Debug("Setting job.IsUserPaused to {0}. jobId: {1}", isUserPaused, job.Id);
+                    job.IsUserPaused = isUserPaused.Value;
+                }
                 PingTimer(job, true);
             }
         }
@@ -336,7 +349,7 @@ namespace MediaBrowser.Api
 
             if (job.Type != TranscodingJobType.Progressive)
             {
-                timerDuration = 1800000;
+                timerDuration = 60000;
             }
 
             job.PingTimeout = timerDuration;
@@ -475,13 +488,17 @@ namespace MediaBrowser.Api
                 {
                     try
                     {
-                        Logger.Info("Killing ffmpeg process for {0}", job.Path);
+                        Logger.Info("Stopping ffmpeg process with q command for {0}", job.Path);
 
                         //process.Kill();
                         process.StandardInput.WriteLine("q");
 
                         // Need to wait because killing is asynchronous
-                        process.WaitForExit(5000);
+                        if (!process.WaitForExit(5000))
+                        {
+                            Logger.Info("Killing ffmpeg process for {0}", job.Path);
+                            process.Kill();
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -655,6 +672,7 @@ namespace MediaBrowser.Api
         public object ProcessLock = new object();
 
         public bool HasExited { get; set; }
+        public bool IsUserPaused { get; set; }
 
         public string Id { get; set; }
 
